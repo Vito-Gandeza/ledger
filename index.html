@@ -46,18 +46,18 @@ h3{font-weight:500; font-size:18px}
 /* ---------- dashboard grid ---------- */
 .dash{display:grid; gap:30px 26px; align-items:start; grid-template-columns:minmax(0,1fr)}
 .dash > *{min-width:0}
-.a-hero{grid-area:hero} .a-plan{grid-area:plan} .a-timeline{grid-area:timeline}
+.a-hero{grid-area:hero} .a-plan{grid-area:plan} .a-timeline{grid-area:timeline} .a-weekly{grid-area:weekly}
 .a-wallets{grid-area:wallets} .a-cards{grid-area:cards} .a-loans{grid-area:loans}
 .a-log{grid-area:log} .a-foot{grid-area:foot}
 @media (min-width:1080px){
   body{max-width:1240px}
   .dash{grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);
-    grid-template-areas:"hero hero" "plan timeline" "wallets timeline" "cards loans" "log log" "foot foot";}
+    grid-template-areas:"hero hero" "plan timeline" "weekly timeline" "wallets timeline" "cards loans" "log log" "foot foot";}
 }
 @media (min-width:1500px){
   body{max-width:1580px}
   .dash{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.95fr);
-    grid-template-areas:"hero hero hero" "plan wallets timeline" "cards loans timeline" "log log timeline" "foot foot foot";}
+    grid-template-areas:"hero hero hero" "plan wallets timeline" "weekly wallets timeline" "cards loans timeline" "log log timeline" "foot foot foot";}
 }
 
 /* ---------- hero ---------- */
@@ -68,11 +68,17 @@ header{padding:6px 0 24px; border-bottom:1px solid var(--line)}
 .alertbar{margin-top:18px; padding:11px 14px; border-radius:12px; font-size:13px;
   background:color-mix(in srgb, var(--bad) 13%, transparent);
   border:1px solid color-mix(in srgb, var(--bad) 40%, transparent)}
+.alertbar.ok{background:color-mix(in srgb, var(--good) 13%, transparent);
+  border-color:color-mix(in srgb, var(--good) 40%, transparent)}
+.alertbar + .alertbar{margin-top:10px}
 
 .shead{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; gap:10px 12px; flex-wrap:wrap}
 .shead .acts{display:flex; gap:6px}
 
 /* ---------- surfaces ---------- */
+/* Own compositor layer per section, so a big innerHTML swap in one card can't tear/ghost
+   against whatever iOS Safari already had painted in a neighboring section mid-scroll. */
+.card, .plan, header.a-hero{ transform:translateZ(0); -webkit-backface-visibility:hidden }
 .card{background:var(--card); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; box-shadow:var(--shadow)}
 .row{display:flex; align-items:center; gap:9px; padding:12px 14px; border-bottom:1px solid var(--line);
      transition:background .18s var(--ease)}
@@ -110,6 +116,12 @@ button{background:none; border:0; cursor:pointer}
 .dot{width:8px; height:8px; border-radius:99px; flex:none}
 .pill{font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:2px 7px; border-radius:99px; border:1px solid var(--line); color:var(--dim)}
 .cnt{font-size:11px; color:var(--dim); border:1px solid var(--line); border-radius:99px; padding:1px 7px}
+.wk{display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--line)}
+.wk:last-child{border-bottom:0}
+.wk.now{background:color-mix(in srgb, var(--accent) 8%, transparent)}
+.wk .rng{font-size:13px; width:96px; flex:none}
+.wk .mv{font-size:12px; color:var(--dim)}
+.wk .bal{width:96px; text-align:right; flex:none}
 select.inline{width:auto; padding:5px 8px; font-size:13px; border-radius:99px}
 /* iOS Safari auto-zooms the page on focusing any form control under 16px — these dropdowns
    sit right in the header/section titles, so a stray tap there was zooming the whole page. */
@@ -123,6 +135,9 @@ label .eyebrow{display:block; margin-bottom:5px}
 
 /* ---------- dialog ---------- */
 dialog{border:0; border-radius:20px; background:var(--card); color:var(--fg); padding:24px;
+  /* Explicit centering instead of relying on the UA default — some WebKit builds (notably
+     standalone/home-screen PWAs) fail to auto-center <dialog> and pin it top-left instead. */
+  position:fixed; inset:0; margin:auto;
   width:min(440px,calc(100vw - 32px)); max-height:86vh; box-shadow:0 30px 70px -20px rgba(0,0,0,.5);
   opacity:0; transform:translateY(10px) scale(.97);
   transition:opacity .24s var(--ease), transform .24s var(--ease), overlay .24s allow-discrete, display .24s allow-discrete}
@@ -244,13 +259,16 @@ body.boot .dash > *:nth-child(8){animation-delay:.44s}
   <header class="a-hero">
     <div class="shead" style="margin-bottom:0">
       <div class="eyebrow">Net position</div>
-      <button class="btn mini" id="syncBtn">set up sync</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn mini" id="undoBtn" disabled title="undo the last change">↺ Undo</button>
+        <button class="btn mini" id="syncBtn">set up sync</button>
+      </div>
     </div>
     <div class="net num" id="net">₱0</div>
     <div class="split">
       <div><div class="eyebrow">Assets</div><div class="v num" id="assets">₱0</div></div>
       <div><div class="eyebrow">Owed</div><div class="v num bad" id="owed">₱0</div></div>
-      <div><div class="eyebrow">Safe to spend</div><div class="v num" id="safe">₱0</div><div class="sub" id="safeNote"></div></div>
+      <div><div class="eyebrow">Safe to spend this week</div><div class="v num" id="safe">₱0</div><div class="sub" id="safeNote"></div></div>
       <div><div class="eyebrow">Debt-free</div><div class="v" id="freeBy">—</div><div class="sub" id="freeNote"></div></div>
     </div>
     <div id="alert"></div>
@@ -271,6 +289,11 @@ body.boot .dash > *:nth-child(8){animation-delay:.44s}
   <section class="a-timeline">
     <div class="shead"><h2>Payment timeline</h2><select id="tlFilter" class="inline"></select></div>
     <div class="card" id="timeline"></div>
+  </section>
+
+  <section class="a-weekly">
+    <div class="shead"><h2>Weekly outlook</h2></div>
+    <div class="card" id="weekly"></div>
   </section>
 
   <section class="a-wallets">
@@ -299,6 +322,7 @@ body.boot .dash > *:nth-child(8){animation-delay:.44s}
 
   <footer class="a-foot">
     <button class="btn" id="exportBtn">Export backup</button>
+    <button class="btn" id="icsBtn">Add to Calendar</button>
     <button class="btn" id="importBtn">Import</button>
     <button class="btn ghost" id="resetBtn">Reset</button>
     <span class="sub num" id="syncNote" style="margin-left:auto">Stored only in this browser</span>
@@ -409,13 +433,24 @@ function demoData(){
 
 // Saved data survives upgrades — balances you already edited are never overwritten.
 function migrate(s){
-  s.accounts ??= []; s.loans ??= []; s.log ??= [];
+  s.accounts ??= []; s.loans ??= []; s.log ??= []; s.allowance ??= null;
   for(const L of s.loans){
     if(isCard(L)){ L.purchases ??= []; rebuildCard(L); }
     else L.items ??= [];
   }
   s.v = DATA_V;
   return s;
+}
+
+// S.allowance = {weekday:0-6 (Sun=0), amount, lastAdded:"YYYY-MM-DD"|""} | null
+const WEEKDAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+function isAllowanceDay(){ return !!S.allowance && new Date().getDay()===S.allowance.weekday && S.allowance.lastAdded!==today(); }
+// Days until the next scheduled allowance — the window "safe to spend" and the weekly
+// outlook both use. No schedule set = a plain 7-day week, same idea without the exact date.
+function daysUntilAllowance(){
+  if(!S.allowance) return 7;
+  const delta = (S.allowance.weekday - new Date().getDay() + 7) % 7;
+  return delta === 0 ? 7 : delta; // today IS allowance day: the relevant horizon is the week starting now
 }
 
 let S = load();
@@ -454,6 +489,10 @@ async function pushCloud(){
   } catch(e){ console.warn(e); setSyncNote("Sync failed — will retry"); }
   syncing = false;
 }
+// Waits for a clean, settled frame before a big DOM rewrite lands — mutating mid
+// momentum-scroll is what was producing the smeared/ghosted text on iPhone.
+const renderNextFrame = ()=> requestAnimationFrame(()=> requestAnimationFrame(render));
+
 // Runs once on boot: if another device pushed since our last known sync stamp,
 // adopt the cloud copy. Simple last-write-wins — fine for one person's own devices,
 // not built for two people editing the same code at the same moment.
@@ -464,7 +503,7 @@ async function bootSync(){
     const row = await pullCloud(code);
     if(row && row.updated_at !== localStorage.getItem("syncStamp")){
       S = migrate(row.data); localStorage.setItem("syncStamp", row.updated_at);
-      logIt("Synced newer data from another device"); render(); return;
+      logIt("Synced newer data from another device"); renderNextFrame(); return;
     }
     if(!row) await pushCloud();
   } catch(e){ console.warn("sync check failed", e); }
@@ -496,7 +535,7 @@ async function setupSync(){
       const row = await pullCloud(code);
       localStorage.setItem("syncCode", code);
       if(row){ localStorage.setItem("syncStamp", row.updated_at);
-        S = migrate(row.data); logIt("Pulled data from sync"); render(); }
+        S = migrate(row.data); logIt("Pulled data from sync"); renderNextFrame(); }
       else await pushCloud(); // brand-new code with nothing on it yet: seed it with what's here
       renderSyncBtn();
     } catch(e){ alert("Could not reach sync: "+e.message); }
@@ -602,27 +641,54 @@ function paint(){
   tween($("#assets"), assets);
   tween($("#owed"), owed);
 
-  // Safe to spend = allowance left after every envelope is topped up for the next 2 weeks.
-  const gaps = r2(fundingPlan(14).rows.reduce((s,r)=>s+r.gap,0));
+  // Safe to spend = allowance left after every envelope is topped up before the next allowance
+  // lands (defaults to a plain 7-day week if no allowance schedule is set).
+  const window = daysUntilAllowance();
+  const gaps = r2(fundingPlan(window).rows.reduce((s,r)=>s+r.gap,0));
   const safe = r2((incomeAcc()?.bal || 0) - gaps);
   tween($("#safe"), safe);
   $("#safe").className = "v num " + (safe<0 ? "bad" : safe===0 ? "warn" : "ok");
-  $("#safeNote").textContent = gaps>0 ? `after ${money(gaps)} of top-ups` : "nothing left to fund";
+  $("#safeNote").textContent = gaps>0
+    ? `after ${money(gaps)} of top-ups, until your next allowance` : "until your next allowance";
 
   const last = S.loans.flatMap(unpaid).map(i=>i.due).sort().pop();
   $("#freeBy").textContent = last ? niceY(last) : "clear";
   $("#freeNote").textContent = last ? `${Math.ceil(daysTo(last)/7)} weeks left` : "";
 
   const late = dues(9999).filter(d=>daysTo(d.it.due)<0);
-  $("#alert").innerHTML = late.length
+  let alertHtml = late.length
     ? `<div class="alertbar bad">${late.length} payment${late.length>1?"s":""} overdue ·
        ${money(r2(late.reduce((s,d)=>s+d.it.amount,0)))} — ${esc(late[0].L.label)} since ${nice(late[0].it.due)}</div>` : "";
+  if(isAllowanceDay() && incomeAcc()){
+    alertHtml += `<div class="alertbar ok" style="display:flex;align-items:center;gap:10px">
+      <span class="grow">It's allowance day — add ${money(S.allowance.amount)} to ${esc(incomeAcc().name)}?</span>
+      <button class="btn mini primary" data-add-allowance>Add</button></div>`;
+  }
+  $("#alert").innerHTML = alertHtml;
 
-  renderAccounts(); renderCards(); renderLoans(); renderPlan(); renderTimeline();
+  renderAccounts(); renderCards(); renderLoans(); renderPlan(); renderTimeline(); renderWeekly();
   $("#log").innerHTML = S.log.map(l=>`<div class="row"><div class="grow"><div class="name">${esc(l.t)}</div>
       <div class="sub">${new Date(l.when).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</div></div></div>`
     ).join("") || `<div class="empty">Nothing logged yet.</div>`;
-  save(); renderSyncBtn(); queuePush();
+  save(); renderSyncBtn(); queuePush(); pushHistory();
+  const u = $("#undoBtn"); if(u) u.disabled = history.length < 2;
+}
+
+// ---------- undo ----------
+// Every render() call follows a real data change, so a state snapshot at the end of each
+// one is a natural checkpoint. "Undo" just steps back one.
+let history = [], suppressHistory = false;
+function pushHistory(){
+  if(suppressHistory){ suppressHistory = false; return; }
+  history.push(JSON.stringify(S));
+  if(history.length > 25) history.shift();
+}
+function undo(){
+  if(history.length < 2) return;
+  history.pop();
+  suppressHistory = true;
+  S = migrate(JSON.parse(history[history.length - 1]));
+  render();
 }
 
 // count-up so a balance change is felt, not just seen
@@ -648,6 +714,7 @@ function renderAccounts(){
           <div class="sub">${kids.length? `wallet ${money(p.bal)} · group ${money(groupTotal(p))}`
                                         : ({cash:"Physical cash",gcash:"E-wallet",gotyme:"Bank"})[p.kind]}</div></div>
         <div class="amt num">${money(p.bal)}</div>
+        <button class="iconbtn" data-xfer="${p.id}" title="transfer">⇄</button>
         ${p.id===m?.id?`<button class="iconbtn" data-add-kid="${p.id}" title="add section">+</button>`:""}
         <button class="iconbtn" data-edit-acc="${p.id}">edit</button>
       </div>`;
@@ -663,6 +730,7 @@ function renderAccounts(){
         <div class="grow"><div class="name">${esc(k.name)}</div><div class="sub">${note}</div></div>
         <div class="amt num">${money(k.bal)}</div>
         ${k.loanId==="income"?"":`<button class="btn mini" data-fund="${k.id}">Fund</button>`}
+        <button class="iconbtn" data-xfer="${k.id}" title="transfer">⇄</button>
         <button class="iconbtn" data-edit-acc="${k.id}">edit</button>
       </div>`;
     }).join("");
@@ -822,6 +890,33 @@ function renderPlan(){
   };
 }
 
+// Total assets today, carried forward week by week: minus everything due that week,
+// plus allowance if the schedule lands one or more times in it. Conservative on purpose —
+// no allowance configured means 0 income assumed, never a fabricated number.
+function weeklyOutlook(weeks){
+  let bal = r2(S.accounts.reduce((s,a)=>s+a.bal,0));
+  const start = today(), rows = [];
+  for(let w=0; w<weeks; w++){
+    const wStart = addDays(start, w*7), wEnd = addDays(start, w*7+6);
+    const obligations = r2(S.loans.reduce((s,L)=>
+      s + unpaid(L).filter(i=>i.due>=wStart && i.due<=wEnd).reduce((t,i)=>t+i.amount,0), 0));
+    let income = 0;
+    if(S.allowance) for(let d=0; d<7; d++)
+      if(new Date(addDays(wStart,d)+"T00:00:00").getDay() === S.allowance.weekday) income += S.allowance.amount;
+    bal = r2(bal + income - obligations);
+    rows.push({wStart, wEnd, obligations, income, bal});
+  }
+  return rows;
+}
+function renderWeekly(){
+  const rows = weeklyOutlook(8);
+  $("#weekly").innerHTML = rows.map((r,i)=>`<div class="wk${i===0?" now":""}">
+      <span class="rng">${nice(r.wStart)}–${nice(r.wEnd)}</span>
+      <span class="grow mv">${r.obligations?`-${money(r.obligations)} due`:"nothing due"}${r.income?` · +${money(r.income)} allowance`:""}</span>
+      <span class="bal num ${r.bal<0?"bad":""}">${money(r.bal)}</span>
+    </div>`).join("");
+}
+
 const TL_MONTHS = 2;
 function renderTimeline(){
   const sel = $("#tlFilter"), keep = sel.value;
@@ -916,6 +1011,7 @@ $("#wDemo").onclick  = ()=>{ S = demoData(); render(); };
 $("#wImport").onclick = ()=> $("#importFile").click();
 $("#wSync").onclick = setupSync;
 $("#syncBtn").onclick = setupSync;
+$("#undoBtn").onclick = undo;
 
 // ---------- actions ----------
 $("#addAcc").onclick = ()=> addSection(mainAcc()?.id);
@@ -982,7 +1078,7 @@ function reorder(id, dir){
 }
 
 document.body.addEventListener("click", e=>{
-  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link]");
+  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-add-allowance],[data-xfer]");
   if(!t) return;
   const pick = k => { const [id,i] = (t.dataset[k]||"").split(":"); return [loan(id), +i]; };
   const pickCard = k => { const [id,key] = (t.dataset[k]||"").split(":"); return [loan(id), key]; };
@@ -1066,10 +1162,14 @@ document.body.addEventListener("click", e=>{
   }
 
   if(t.dataset.editAcc){
-    const a = acc(t.dataset.editAcc), kids = kidsOf(a.id);
+    const a = acc(t.dataset.editAcc), kids = kidsOf(a.id), isAllowanceAcc = a.loanId==="income";
     const f = [{name:"name",label:"Name",value:a.name},
                {name:"bal",label:"Balance (set to what the app shows)",type:"number",value:a.bal}];
     if(a.parent) f.splice(1,0,{name:"loanId",label:"What it is for",type:"select",options:loanOptions(),value:a.loanId});
+    if(isAllowanceAcc) f.push(
+      {name:"aday",label:"Allowance day",type:"select",value:S.allowance?.weekday ?? "",
+        options:[{v:"",t:"— not scheduled —"},...WEEKDAYS.map((w,i)=>({v:i,t:"Every "+w}))]},
+      {name:"aamt",label:"Allowance amount",type:"number",value:S.allowance?.amount ?? ""});
     f.del = true;
     ask("Edit "+a.name, f, (v,d)=>{
       if(v==="del"){
@@ -1079,8 +1179,19 @@ document.body.addEventListener("click", e=>{
       }
       if(v!=="ok") return;
       if(r2(d.bal)!==a.bal) logIt(`${a.name}: ${money(a.bal)} → ${money(r2(d.bal))}`);
-      a.name=d.name; a.bal=r2(d.bal); if("loanId" in d) a.loanId=d.loanId; render(); });
+      a.name=d.name; a.bal=r2(d.bal); if("loanId" in d) a.loanId=d.loanId;
+      if(isAllowanceAcc){
+        if(d.aday!=="" && d.aamt){ S.allowance = {weekday:+d.aday, amount:r2(d.aamt), lastAdded:S.allowance?.lastAdded||""}; logIt(`Allowance set: ${money(r2(d.aamt))} every ${WEEKDAYS[+d.aday]}`); }
+        else if(S.allowance){ S.allowance = null; logIt("Allowance schedule cleared"); }
+      }
+      render(); });
   }
+  if(t.hasAttribute("data-add-allowance")){
+    const a = incomeAcc();
+    a.bal = r2(a.bal + S.allowance.amount); S.allowance.lastAdded = today();
+    logIt(`Added weekly allowance ${money(S.allowance.amount)} to ${a.name}`); render();
+  }
+  if(t.dataset.xfer) openMove(t.dataset.xfer);
 
   if(t.dataset.pay){
     const [L,i] = pick("pay"), it = L.items[i], env = envelopeFor(L.id);
@@ -1121,16 +1232,19 @@ document.body.addEventListener("click", e=>{
   }
 });
 
-$("#moveBtn").onclick = ()=>{
+// fromId preselects the source — every wallet/section gets its own transfer button that
+// calls this instead of just the one global "Move".
+function openMove(fromId){
   ask("Move money",[
-    {name:"from",label:"From",type:"select",options:allAccOptions(),value:incomeAcc()?.id},
+    {name:"from",label:"From",type:"select",options:allAccOptions(),value:fromId||incomeAcc()?.id},
     {name:"to",label:"To",type:"select",options:allAccOptions(),value:mainAcc()?.id},
     {name:"amount",label:"Amount",type:"number",required:1}],
     (v,d)=>{ if(v!=="ok"||d.from===d.to) return;
       const a=acc(d.from), b=acc(d.to), amt=r2(d.amount);
       a.bal=r2(a.bal-amt); b.bal=r2(b.bal+amt);
       logIt(`Moved ${money(amt)}: ${a.name} → ${b.name}`); render(); });
-};
+}
+$("#moveBtn").onclick = ()=> openMove();
 
 $("#horizon").onchange = renderPlan;
 $("#tlFilter").onchange = renderTimeline;
@@ -1139,6 +1253,28 @@ $("#exportBtn").onclick = ()=>{
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:"application/json"}));
   a.download = `ledger-${today()}.json`; a.click(); URL.revokeObjectURL(a.href);
+};
+// One-time .ics with every unpaid due date + a day-before alarm. Import it into Calendar
+// once and every due date shows up on iPhone, iPad, and Apple Watch — no app needed.
+// Not a live feed (there's no server to host one): re-export and re-import after changes.
+const icsEsc = s => String(s).replace(/[\\;,]/g, m=>"\\"+m);
+$("#icsBtn").onclick = ()=>{
+  const rows = dues(9999);
+  if(!rows.length) return alert("Nothing scheduled to export.");
+  const stamp = new Date().toISOString().replace(/[-:]/g,"").split(".")[0]+"Z";
+  const lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Ledger//EN","CALSCALE:GREGORIAN"];
+  for(const {L,it} of rows) lines.push(
+    "BEGIN:VEVENT",
+    `UID:${L.id}-${it.due}@ledger.local`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART;VALUE=DATE:${it.due.replace(/-/g,"")}`,
+    `SUMMARY:${icsEsc(L.provider)} ${icsEsc(L.label)} — ${icsEsc(money(it.amount))}`,
+    "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:Payment due","TRIGGER:-P1D","END:VALARM",
+    "END:VEVENT");
+  lines.push("END:VCALENDAR");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\r\n")], {type:"text/calendar"}));
+  a.download = "ledger-payments.ics"; a.click(); URL.revokeObjectURL(a.href);
 };
 $("#importBtn").onclick = ()=> $("#importFile").click();
 $("#importFile").onchange = async e=>{
@@ -1186,8 +1322,34 @@ function demo(){
   ok(card.items.length===1 && card.items[0].amount===1500, "same-cycle purchases merge", card.items);
   ok(available(card)===6980, "available credit = limit - outstanding", available(card));
   ok(migrate({accounts:[],loans:[],log:[]}).v===DATA_V, "migration stamps the version");
+
+  const todayDow = new Date().getDay();
+  S.allowance = {weekday:(todayDow+3)%7, amount:2000, lastAdded:""};
+  ok(daysUntilAllowance()===3, "3 days until an allowance set 3 weekdays out", daysUntilAllowance());
+  S.allowance = {weekday:todayDow, amount:2000, lastAdded:""};
+  ok(daysUntilAllowance()===7, "allowance today means a full week ahead, not 0");
+  ok(isAllowanceDay()===true, "today matches the scheduled weekday");
+  S.allowance.lastAdded = today();
+  ok(isAllowanceDay()===false, "already added today does not re-fire");
+
+  S.allowance = {weekday:todayDow, amount:1000, lastAdded:""};
+  const wk = weeklyOutlook(2);
+  const wantObl = r2(unpaid(loan("K")).filter(i=>i.due>=wk[0].wStart && i.due<=wk[0].wEnd).reduce((s,i)=>s+i.amount,0));
+  ok(wk[0].obligations===wantObl, "week 0 obligations match dues in that 7-day span", {got:wk[0].obligations, want:wantObl});
+  ok(wk[0].income===1000, "allowance falling in week 0 counts once", wk[0]);
+  ok(r2(S.accounts.reduce((s,a)=>s+a.bal,0) + wk[0].income - wk[0].obligations)===wk[0].bal, "running balance = start + income - obligations");
+  S.allowance = null;
+
+  history = []; suppressHistory = false;
+  const A = JSON.stringify({x:1}), B = JSON.stringify({x:2});
+  history.push(A); history.push(B);
+  ok(history.length===2, "two checkpoints recorded");
+  history.pop(); suppressHistory = true;
+  const restored = JSON.parse(history[history.length-1]);
+  ok(restored.x===1, "undo steps back to the prior checkpoint", restored);
+
   ok(r2(0.1+0.2)===0.3, "rounding");
-  S = save0;
+  S = save0; history = [];
 }
 if(location.search.includes("test")) demo();
 
