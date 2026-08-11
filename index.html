@@ -1,0 +1,1090 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<meta name="theme-color" content="#0b0b0c" media="(prefers-color-scheme:dark)">
+<meta name="theme-color" content="#faf9f7" media="(prefers-color-scheme:light)">
+<meta name="description" content="A private envelope-budgeting ledger for instalment loans and credit cards. Your data never leaves your device.">
+<title>Ledger</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root{
+  --bg:#faf9f7; --fg:#17161a; --dim:#7a7770; --line:#e4e1db; --card:#fff; --sunk:#f4f2ee;
+  --accent:#1f6feb; --good:#0a7d55; --warn:#b0510a; --bad:#b3261e;
+  --r:16px; --pad:clamp(16px,4vw,30px);
+  --ease:cubic-bezier(.22,1,.36,1);
+  --shadow:0 1px 2px rgba(0,0,0,.04), 0 8px 24px -16px rgba(0,0,0,.18);
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#0b0b0c; --fg:#eceae6; --dim:#8b8880; --line:#232326; --card:#121214; --sunk:#0f0f11;
+         --accent:#5b9dff; --good:#3ecf9a; --warn:#e0a44f; --bad:#ff6b60;
+         --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px -18px rgba(0,0,0,.9); }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%; scroll-behavior:smooth}
+body{
+  background:var(--bg); color:var(--fg); font:400 16px/1.5 ui-sans-serif,-apple-system,"SF Pro Text",Inter,system-ui,sans-serif;
+  font-variant-numeric:tabular-nums; padding:0 var(--pad) 80px;
+  padding-top:calc(env(safe-area-inset-top) + 22px);
+  max-width:760px; margin:0 auto; -webkit-tap-highlight-color:transparent;
+  transition:max-width .3s var(--ease);
+}
+h2{font-weight:500; letter-spacing:-.02em; font-size:19px}
+h3{font-weight:500; font-size:18px}
+.eyebrow{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim)}
+.num{font-family:ui-monospace,"SF Mono",Menlo,monospace; font-variant-numeric:tabular-nums}
+.grow{flex:1; min-width:0}
+.sub{font-size:12px; color:var(--dim)}
+
+/* ---------- dashboard grid ---------- */
+.dash{display:grid; gap:30px 26px; align-items:start; grid-template-columns:minmax(0,1fr)}
+.dash > *{min-width:0}
+.a-hero{grid-area:hero} .a-plan{grid-area:plan} .a-timeline{grid-area:timeline}
+.a-wallets{grid-area:wallets} .a-cards{grid-area:cards} .a-loans{grid-area:loans}
+.a-log{grid-area:log} .a-foot{grid-area:foot}
+@media (min-width:1080px){
+  body{max-width:1240px}
+  .dash{grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);
+    grid-template-areas:"hero hero" "plan timeline" "wallets timeline" "cards loans" "log log" "foot foot";}
+}
+@media (min-width:1500px){
+  body{max-width:1580px}
+  .dash{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.95fr);
+    grid-template-areas:"hero hero hero" "plan wallets timeline" "cards loans timeline" "log log timeline" "foot foot foot";}
+}
+
+/* ---------- hero ---------- */
+header{padding:6px 0 24px; border-bottom:1px solid var(--line)}
+.net{font-size:clamp(38px,10vw,60px); line-height:1; letter-spacing:-.045em; margin:10px 0 18px}
+.split{display:grid; gap:18px 22px; grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.split .v{font-size:18px; margin-top:2px}
+.alertbar{margin-top:18px; padding:11px 14px; border-radius:12px; font-size:13px;
+  background:color-mix(in srgb, var(--bad) 13%, transparent);
+  border:1px solid color-mix(in srgb, var(--bad) 40%, transparent)}
+
+.shead{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; gap:12px}
+.shead .acts{display:flex; gap:6px}
+
+/* ---------- surfaces ---------- */
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; box-shadow:var(--shadow)}
+.row{display:flex; align-items:center; gap:9px; padding:12px 14px; border-bottom:1px solid var(--line);
+     transition:background .18s var(--ease)}
+.row:last-child{border-bottom:0}
+.row:hover{background:var(--sunk)}
+.name{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.amt{white-space:nowrap}
+.kid{padding-left:30px; background:var(--sunk); position:relative}
+.kid::before{content:""; position:absolute; left:17px; top:0; bottom:0; width:1px; background:var(--line)}
+.kid .name{font-size:15px}
+.head-row .name{font-weight:500}
+.empty{color:var(--dim); font-size:14px; padding:18px 14px}
+
+button,select,input{font:inherit; color:inherit}
+button{background:none; border:0; cursor:pointer}
+.btn{border:1px solid var(--line); background:var(--card); border-radius:99px; padding:7px 13px; font-size:13px;
+  transition:transform .16s var(--ease), background .16s, border-color .16s, box-shadow .16s}
+.btn:hover{border-color:var(--dim)}
+.btn:active{transform:scale(.96)}
+.btn.primary{background:var(--fg); color:var(--bg); border-color:var(--fg)}
+.btn.primary:hover{box-shadow:0 6px 18px -8px var(--fg)}
+.btn.ghost{border-color:transparent; color:var(--dim); padding:7px 6px}
+.btn.ghost:hover{color:var(--fg)}
+.btn.mini{padding:4px 10px; font-size:12px}
+.btn.big{padding:11px 20px; font-size:15px}
+.iconbtn{color:var(--dim); font-size:13px; padding:5px 5px; border-radius:8px; line-height:1; transition:color .16s, transform .16s var(--ease)}
+.iconbtn:hover{color:var(--fg)}
+.iconbtn:active{transform:scale(.9)}
+.iconbtn:disabled{opacity:.22; cursor:default}
+.dot{width:8px; height:8px; border-radius:99px; flex:none}
+.pill{font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:2px 7px; border-radius:99px; border:1px solid var(--line); color:var(--dim)}
+.cnt{font-size:11px; color:var(--dim); border:1px solid var(--line); border-radius:99px; padding:1px 7px}
+select.inline{width:auto; padding:5px 8px; font-size:13px; border-radius:99px}
+
+input,select{background:transparent; border:1px solid var(--line); border-radius:11px; padding:11px 12px; width:100%;
+  transition:border-color .16s, box-shadow .16s}
+input:focus,select:focus{outline:0; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
+label{display:block; margin-bottom:13px}
+label .eyebrow{display:block; margin-bottom:5px}
+
+/* ---------- dialog ---------- */
+dialog{border:0; border-radius:20px; background:var(--card); color:var(--fg); padding:24px;
+  width:min(440px,calc(100vw - 32px)); max-height:86vh; box-shadow:0 30px 70px -20px rgba(0,0,0,.5);
+  opacity:0; transform:translateY(10px) scale(.97);
+  transition:opacity .24s var(--ease), transform .24s var(--ease), overlay .24s allow-discrete, display .24s allow-discrete}
+dialog[open]{opacity:1; transform:none}
+@starting-style{ dialog[open]{opacity:0; transform:translateY(10px) scale(.97)} }
+dialog::backdrop{background:rgba(0,0,0,.45); backdrop-filter:blur(4px); opacity:0; transition:opacity .24s, overlay .24s allow-discrete, display .24s allow-discrete}
+dialog[open]::backdrop{opacity:1}
+@starting-style{ dialog[open]::backdrop{opacity:0} }
+dialog h3{margin-bottom:18px}
+.dact{display:flex; gap:10px; justify-content:flex-end; margin-top:4px}
+.hint{font-size:12px; color:var(--dim); margin:-6px 0 14px}
+
+/* ---------- plan ---------- */
+.plan{border:1px solid var(--line); border-radius:var(--r); padding:17px 18px; background:var(--card); box-shadow:var(--shadow)}
+.plan .big{font-size:29px; letter-spacing:-.035em; margin:6px 0 4px}
+.move{display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px dashed var(--line)}
+.move:last-child{border-bottom:0}
+.bar{height:4px; background:var(--sunk); border-radius:99px; overflow:hidden; margin-top:9px}
+.bar i{display:block; height:100%; background:var(--accent); transition:width .7s var(--ease)}
+.ok{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)} .dim{color:var(--dim)}
+
+.grp{padding:10px 0; border-bottom:1px dashed var(--line)}
+.grp:last-of-type{border-bottom:0}
+.grp .top{display:flex; align-items:center; gap:9px; font-size:14px}
+.grp .line{display:flex; gap:8px; font-size:12.5px; color:var(--dim); padding:4px 0 0 17px}
+.grand{display:flex; gap:10px; align-items:baseline; border-top:1px solid var(--line); margin-top:6px; padding-top:11px}
+
+/* ---------- timeline calendar ---------- */
+.legend{display:flex; gap:14px; flex-wrap:wrap; padding:13px 14px; border-bottom:1px solid var(--line); font-size:12px}
+.legend span{display:flex; align-items:center; gap:6px; color:var(--dim)}
+.nextup{display:flex; gap:9px; align-items:center; padding:11px 14px; border-bottom:1px solid var(--line); font-size:14px}
+.mon{padding:13px 11px 15px; border-bottom:1px solid var(--line)}
+.mon:last-child{border-bottom:0}
+.monhead{display:flex; align-items:baseline; gap:8px; padding:2px 3px 10px}
+.monhead b{font-weight:500}
+.dow,.days{display:grid; grid-template-columns:repeat(7,1fr); gap:4px}
+.dow{font-size:10px; color:var(--dim); text-align:center; margin-bottom:5px; letter-spacing:.06em}
+.day{min-height:52px; border-radius:10px; padding:5px 2px 4px; display:flex; flex-direction:column;
+     align-items:center; gap:2px; border:1px solid transparent; transition:transform .18s var(--ease), background .18s}
+.day .n{font-size:11px; color:var(--dim); line-height:1}
+.day.has{background:var(--sunk); border-color:var(--line)}
+.day.has:hover{transform:translateY(-2px)}
+.day.has .n{color:var(--fg)}
+.day.late{background:color-mix(in srgb, var(--bad) 14%, transparent); border-color:color-mix(in srgb, var(--bad) 45%, transparent)}
+.day.today{outline:2px solid var(--accent); outline-offset:-2px}
+.day .dots{display:flex; gap:2px; flex-wrap:wrap; justify-content:center}
+.day .dots i{width:6px; height:6px; border-radius:99px}
+.day .a{font-size:9.5px; letter-spacing:-.02em; margin-top:auto}
+.day.blank{visibility:hidden}
+.tlfoot{padding:11px 14px; font-size:12px; color:var(--dim); display:flex; gap:8px}
+
+/* ---------- card ---------- */
+.cardface{padding:19px 18px 17px; border-bottom:1px solid var(--line)}
+.cardface .avail{font-size:33px; letter-spacing:-.035em; margin:6px 0 2px}
+.limitbar{height:7px; background:var(--sunk); border-radius:99px; overflow:hidden; margin:13px 0 7px; display:flex}
+.limitbar i{display:block; height:100%; transition:width .7s var(--ease)}
+.limitbar .used{background:var(--accent)}
+.limitbar .open{background:var(--warn)}
+.cyc{padding:14px; border-bottom:1px solid var(--line)}
+.cyc:last-child{border-bottom:0}
+.cyc.openc{background:var(--sunk)}
+.cychead{display:flex; align-items:baseline; gap:8px; margin-bottom:2px}
+.pur{display:flex; gap:9px; align-items:center; padding:7px 0 7px 12px; font-size:14px; border-top:1px dashed var(--line)}
+
+details summary{list-style:none; cursor:pointer}
+details summary::-webkit-details-marker{display:none}
+details[open] .chev{transform:rotate(90deg)}
+.chev{display:inline-block; transition:transform .2s var(--ease); color:var(--dim); font-size:12px}
+.inst{display:flex; align-items:center; gap:9px; padding:9px 14px 9px 28px; border-top:1px solid var(--line); background:var(--sunk); font-size:14px}
+
+footer{border-top:1px solid var(--line); padding-top:18px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; font-size:13px}
+
+/* ---------- welcome ---------- */
+#welcome{max-width:520px; margin:8vh auto; text-align:center}
+#welcome .mark{font-size:56px; line-height:1; letter-spacing:-.05em; margin-bottom:18px}
+#welcome p{color:var(--dim); font-size:15px; margin:12px 0 26px}
+#welcome .wacts{display:flex; gap:10px; justify-content:center; flex-wrap:wrap}
+body[data-state="empty"] .dash{display:none}
+body[data-state="ready"] #welcome{display:none}
+
+/* ---------- motion ---------- */
+@keyframes rise{from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none}}
+body.boot .dash > *{animation:rise .6s var(--ease) backwards}
+body.boot .dash > *:nth-child(1){animation-delay:.02s}
+body.boot .dash > *:nth-child(2){animation-delay:.08s}
+body.boot .dash > *:nth-child(3){animation-delay:.14s}
+body.boot .dash > *:nth-child(4){animation-delay:.20s}
+body.boot .dash > *:nth-child(5){animation-delay:.26s}
+body.boot .dash > *:nth-child(6){animation-delay:.32s}
+body.boot .dash > *:nth-child(7){animation-delay:.38s}
+body.boot .dash > *:nth-child(8){animation-delay:.44s}
+#welcome{animation:rise .7s var(--ease) backwards .1s}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.26s; animation-timing-function:var(--ease)}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms !important; transition-duration:.001ms !important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body class="boot" data-state="empty">
+
+<div id="welcome">
+  <div class="mark num">₱</div>
+  <h2>Ledger</h2>
+  <p>Envelope budgeting for instalment loans and credit cards.<br>
+     Everything stays in this browser — nothing is ever uploaded.</p>
+  <div class="wacts">
+    <button class="btn primary big" id="wStart">Set up my wallets</button>
+    <button class="btn big" id="wImport">Import a backup</button>
+    <button class="btn ghost" id="wDemo">Look at a demo</button>
+  </div>
+</div>
+
+<div class="dash">
+  <header class="a-hero">
+    <div class="eyebrow">Net position</div>
+    <div class="net num" id="net">₱0</div>
+    <div class="split">
+      <div><div class="eyebrow">Assets</div><div class="v num" id="assets">₱0</div></div>
+      <div><div class="eyebrow">Owed</div><div class="v num bad" id="owed">₱0</div></div>
+      <div><div class="eyebrow">Safe to spend</div><div class="v num" id="safe">₱0</div><div class="sub" id="safeNote"></div></div>
+      <div><div class="eyebrow">Debt-free</div><div class="v" id="freeBy">—</div><div class="sub" id="freeNote"></div></div>
+    </div>
+    <div id="alert"></div>
+  </header>
+
+  <section class="a-plan">
+    <div class="shead"><h2>Fund the envelopes</h2>
+      <select id="horizon" class="inline">
+        <option value="7">next 7 days</option>
+        <option value="14" selected>next 14 days</option>
+        <option value="30">next 30 days</option>
+        <option value="9999">everything left</option>
+      </select>
+    </div>
+    <div class="plan" id="plan"></div>
+  </section>
+
+  <section class="a-timeline">
+    <div class="shead"><h2>Payment timeline</h2><select id="tlFilter" class="inline"></select></div>
+    <div class="card" id="timeline"></div>
+  </section>
+
+  <section class="a-wallets">
+    <div class="shead"><h2>Wallets</h2>
+      <div class="acts"><button class="btn ghost" id="moveBtn">Move</button><button class="btn" id="addAcc">+ Section</button></div>
+    </div>
+    <div class="card" id="accounts"></div>
+  </section>
+
+  <section class="a-cards" id="cardsWrap">
+    <div class="shead"><h2>Cards</h2>
+      <div class="acts"><button class="btn ghost" id="addCard">+ Card</button><button class="btn" id="addPurchase">+ Purchase</button></div>
+    </div>
+    <div id="cards"></div>
+  </section>
+
+  <section class="a-loans">
+    <div class="shead"><h2>Instalment loans</h2><button class="btn" id="addLoan">+ Loan</button></div>
+    <div class="card" id="loans"></div>
+  </section>
+
+  <section class="a-log">
+    <div class="shead"><h2>Activity</h2><button class="btn ghost" id="clearLog">clear</button></div>
+    <div class="card" id="log"></div>
+  </section>
+
+  <footer class="a-foot">
+    <button class="btn" id="exportBtn">Export backup</button>
+    <button class="btn" id="importBtn">Import</button>
+    <button class="btn ghost" id="resetBtn">Reset</button>
+    <span class="sub" style="margin-left:auto">Stored only in this browser</span>
+  </footer>
+</div>
+
+<input type="file" id="importFile" accept="application/json" hidden>
+<dialog id="dlg"><form method="dialog" id="dlgForm"></form></dialog>
+
+<script>
+"use strict";
+const PESO = "₱";
+const $ = s => document.querySelector(s);
+const money = n => PESO + (n<0?"-":"") + Math.abs(n).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
+const r2 = n => Math.round((Number(n)||0)*100)/100;
+const uid = () => Math.random().toString(36).slice(2,9);
+const esc = s => String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// Local calendar date. toISOString() would shift PH (UTC+8) back a day before 8am.
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const today = () => iso(new Date());
+const daysTo = d => Math.round((new Date(d+"T00:00:00") - new Date(today()+"T00:00:00"))/864e5);
+const nice = d => new Date(d+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"2-digit"});
+const niceY = d => new Date(d+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"2-digit",year:"numeric"});
+const monthName = d => new Date(d+"T00:00:00").toLocaleDateString("en-PH",{month:"long",year:"numeric"});
+
+const addDays = (s,n) => { const d=new Date(s+"T00:00:00"); d.setDate(d.getDate()+n); return iso(d); };
+// Clamps to end of month: Jan 31 + 1 month = Feb 28, not Mar 3.
+function addMonths(s,n){
+  const d = new Date(s+"T00:00:00"), day = d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth()+n);
+  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()));
+  return iso(d);
+}
+const dayOf = (s,day) => s.slice(0,8) + String(day).padStart(2,"0");
+
+function gen(start, count, freq, amount){
+  const out = []; let d = start;
+  for(let i=0;i<count;i++){
+    out.push({due:d, amount:r2(amount), paid:false});
+    d = freq==="month" ? addMonths(d,1) : addDays(d, freq==="2weeks"?14:7);
+  }
+  return out;
+}
+// Credit-card cycle: a purchase on or after the statement day lands on NEXT month's statement.
+// Buy Aug 05 (sDay 9) -> billed Aug 09, due Aug 19. Buy Aug 11 -> billed Sep 09, due Sep 19.
+function cycleFor(date, sDay, dDay){
+  let m = date.slice(0,7) + "-01";
+  if(+date.slice(8,10) >= sDay) m = addMonths(m,1);
+  return {stmt: dayOf(m,sDay), due: dayOf(m,dDay)};
+}
+// A card's statements are derived from its purchases, so they can never drift apart.
+function rebuildCard(L){
+  const wasPaid = Object.fromEntries((L.items||[]).map(i=>[i.due, i.paid]));
+  const by = new Map();
+  for(const p of L.purchases){
+    const c = cycleFor(p.date, L.sDay, L.dDay);
+    if(!by.has(c.due)) by.set(c.due, {due:c.due, stmt:c.stmt, amount:0, paid:!!wasPaid[c.due]});
+    by.get(c.due).amount = r2(by.get(c.due).amount + p.amount);
+  }
+  L.items = [...by.values()].filter(i=>i.amount!==0).sort((a,b)=> a.due<b.due?-1:1);
+  return L;
+}
+const isCard = L => L.freq === "card";
+const purchasesIn = (L,due) => L.purchases.filter(p=>cycleFor(p.date,L.sDay,L.dDay).due===due)
+                                          .sort((a,b)=> a.date<b.date?-1:1);
+const outstanding = L => r2(unpaid(L).reduce((s,i)=>s+i.amount,0));
+const available = L => r2(L.limit - outstanding(L));
+
+const COLORS = ["#5b9dff","#3ecf9a","#e0a44f","#ff6b60","#b38cff","#4fd1e0"];
+const colorOf = L => COLORS[Math.max(0,S.loans.findIndex(x=>x.id===L.id)) % COLORS.length];
+
+// ---------- data ----------
+const DATA_V = 3;
+const blank = () => ({v:DATA_V, accounts:[], loans:[], log:[]});
+
+function starter(){
+  const main = uid();
+  return {v:DATA_V, accounts:[
+    {id:main,  parent:null, name:"GoTyme Main",  kind:"gotyme", bal:0, loanId:""},
+    {id:uid(), parent:main, name:"Myself",       kind:"gotyme", bal:0, loanId:"income"},
+    {id:uid(), parent:null, name:"GCash",        kind:"gcash",  bal:0, loanId:""},
+    {id:uid(), parent:null, name:"Cash on hand", kind:"cash",   bal:0, loanId:""},
+  ], loans:[], log:[]};
+}
+
+// Fictional numbers, purely so a first-time visitor can see how the pieces fit.
+function demoData(){
+  const main=uid(), a=uid(), b=uid(), card=uid();
+  return {v:DATA_V, accounts:[
+    {id:main,  parent:null, name:"Main bank",    kind:"gotyme", bal:250,  loanId:""},
+    {id:uid(), parent:main, name:"Myself",       kind:"gotyme", bal:2000, loanId:"income"},
+    {id:uid(), parent:main, name:"Groceries plan", kind:"gotyme", bal:300, loanId:a},
+    {id:uid(), parent:main, name:"Laptop plan",  kind:"gotyme", bal:0,    loanId:b},
+    {id:uid(), parent:main, name:"Card",         kind:"gotyme", bal:0,    loanId:card},
+    {id:uid(), parent:null, name:"E-wallet",     kind:"gcash",  bal:420,  loanId:""},
+    {id:uid(), parent:null, name:"Cash on hand", kind:"cash",   bal:180,  loanId:""},
+  ], loans:[
+    {id:a, provider:"Instalment", label:"Groceries plan", ref:"#DEMO-1", freq:"week",
+     items: gen(addDays(today(),3), 10, "week", 65)},
+    {id:b, provider:"Instalment", label:"Laptop plan", ref:"#DEMO-2", freq:"2weeks",
+     items: gen(addDays(today(),10), 4, "2weeks", 1250)},
+    rebuildCard({id:card, provider:"Card", label:"Credit card", ref:"", freq:"card",
+     limit:8000, sDay:9, dDay:19, items:[],
+     purchases:[{id:uid(), date:addDays(today(),-2), label:"Subscription", amount:1410.39}]}),
+  ], log:[]};
+}
+
+// Saved data survives upgrades — balances you already edited are never overwritten.
+function migrate(s){
+  s.accounts ??= []; s.loans ??= []; s.log ??= [];
+  for(const L of s.loans){
+    if(isCard(L)){ L.purchases ??= []; rebuildCard(L); }
+    else L.items ??= [];
+  }
+  s.v = DATA_V;
+  return s;
+}
+
+let S = load();
+function load(){
+  try{ const raw = localStorage.getItem("ledger");
+       if(raw) return migrate(JSON.parse(raw)); }
+  catch(e){ console.warn("unreadable save, starting blank", e); }
+  return blank();
+}
+const save = () => { try{ localStorage.setItem("ledger", JSON.stringify(S)); }
+                     catch(e){ console.warn("could not save", e); } };
+
+const acc = id => S.accounts.find(a=>a.id===id);
+const loan = id => S.loans.find(L=>L.id===id);
+const parents = () => S.accounts.filter(a=>!a.parent);
+const kidsOf = id => S.accounts.filter(a=>a.parent===id);
+const mainAcc = () => S.accounts.find(a=>a.kind==="gotyme" && !a.parent) || parents()[0];
+const envelopes = () => kidsOf(mainAcc()?.id).filter(a=>a.loanId && a.loanId!=="income");
+const incomeAcc = () => S.accounts.find(a=>a.loanId==="income") || mainAcc();
+const groupTotal = a => r2(a.bal + kidsOf(a.id).reduce((s,k)=>s+k.bal,0));
+const envelopeFor = loanId => S.accounts.find(a=>a.loanId===loanId);
+const unpaid = L => (L.items||[]).filter(i=>!i.paid);
+const logIt = t => { S.log.unshift({id:uid(), t, when:new Date().toISOString()}); S.log = S.log.slice(0,80); };
+
+function duesOf(days, L){
+  const out = [];
+  for(const x of (L?[L]:S.loans)) for(const it of (x.items||[]))
+    if(!it.paid && daysTo(it.due) <= days) out.push({L:x, it});
+  return out.sort((a,b)=> a.it.due < b.it.due ? -1 : 1);
+}
+const dues = (days, L) => duesOf(days, L);
+
+// How far this envelope's balance stretches down its own schedule.
+function coverage(env){
+  const L = loan(env.loanId); if(!L) return null;
+  let bal = env.bal, n = 0, through = null;
+  for(const it of unpaid(L)){
+    if(bal + 1e-9 >= it.amount){ bal = r2(bal - it.amount); n++; through = it.due; }
+    else return {n, through, shortNext:r2(it.amount-bal), nextDue:it.due, done:false};
+  }
+  return {n, through, shortNext:0, nextDue:null, done:true};
+}
+
+// One line telling you exactly how far this envelope goes and what closes the gap.
+function covText(env){
+  const L = loan(env.loanId);
+  if(!L) return `<span class="dim">not linked to a loan</span>`;
+  const left = unpaid(L), n = left.length;
+  if(!n) return `<span class="ok">${esc(L.label)} is fully paid off</span>`;
+  const total = r2(left.reduce((s,i)=>s+i.amount,0));
+  const c = coverage(env), gap = r2(total - env.bal);
+  if(c.done) return `<span class="ok">Covers ${n}/${n} — all funded</span>`
+    + (env.bal>total ? ` <span class="dim">· ${money(r2(env.bal-total))} spare</span>` : "");
+  const all = `<span class="warn">${money(gap)} more covers all ${n}</span>`;
+  return c.n
+    ? `Covers <b>${c.n}/${n}</b> · ${all}`
+    : `<span class="bad">Covers 0/${n}</span> · ${money(c.shortNext)} short for ${nice(c.nextDue)} · ${all}`;
+}
+
+// Top up each envelope to cover its own dues in the window. Pull from Myself, then the main wallet.
+function fundingPlan(days){
+  const srcs = [incomeAcc(), mainAcc()].filter((a,i,arr)=>a && arr.indexOf(a)===i);
+  const pool = r2(srcs.reduce((s,a)=>s+a.bal,0));
+  const rows = [];
+  for(const env of envelopes()){
+    const need = r2(dues(days, loan(env.loanId)).reduce((s,d)=>s+d.it.amount,0));
+    const gap = r2(need - env.bal);
+    if(gap > 0) rows.push({env, need, gap});
+  }
+  rows.sort((a,b)=>{
+    const da = unpaid(loan(a.env.loanId))[0]?.due || "9999", db = unpaid(loan(b.env.loanId))[0]?.due || "9999";
+    return da<db?-1:1;
+  });
+  let left = pool, short = 0;
+  for(const r of rows){ r.give = r2(Math.min(left, r.gap)); left = r2(left - r.give); short = r2(short + r.gap - r.give); }
+  const orphanNeed = r2(S.loans.filter(L=>!envelopeFor(L.id))
+    .reduce((s,L)=>s+dues(days,L).reduce((t,d)=>t+d.it.amount,0),0));
+  return {rows, short, pool, orphanNeed, srcs};
+}
+
+// ---------- render ----------
+let booted = false;
+function render(){
+  const go = ()=>{ paint(); };
+  if(booted && document.startViewTransition && !matchMedia("(prefers-reduced-motion:reduce)").matches)
+    document.startViewTransition(go);
+  else go();
+  booted = true;
+}
+
+function paint(){
+  document.body.dataset.state = (S.accounts.length || S.loans.length) ? "ready" : "empty";
+  if(document.body.dataset.state === "empty"){ save(); return; }
+
+  const assets = r2(S.accounts.reduce((s,a)=>s+a.bal,0));
+  const owed   = r2(S.loans.reduce((s,L)=>s+unpaid(L).reduce((t,i)=>t+i.amount,0),0));
+  tween($("#net"), r2(assets-owed));
+  $("#net").className = "net num " + (assets-owed<0?"bad":"");
+  tween($("#assets"), assets);
+  tween($("#owed"), owed);
+
+  // Safe to spend = allowance left after every envelope is topped up for the next 2 weeks.
+  const gaps = r2(fundingPlan(14).rows.reduce((s,r)=>s+r.gap,0));
+  const safe = r2((incomeAcc()?.bal || 0) - gaps);
+  tween($("#safe"), safe);
+  $("#safe").className = "v num " + (safe<0 ? "bad" : safe===0 ? "warn" : "ok");
+  $("#safeNote").textContent = gaps>0 ? `after ${money(gaps)} of top-ups` : "nothing left to fund";
+
+  const last = S.loans.flatMap(unpaid).map(i=>i.due).sort().pop();
+  $("#freeBy").textContent = last ? niceY(last) : "clear";
+  $("#freeNote").textContent = last ? `${Math.ceil(daysTo(last)/7)} weeks left` : "";
+
+  const late = dues(9999).filter(d=>daysTo(d.it.due)<0);
+  $("#alert").innerHTML = late.length
+    ? `<div class="alertbar bad">${late.length} payment${late.length>1?"s":""} overdue ·
+       ${money(r2(late.reduce((s,d)=>s+d.it.amount,0)))} — ${esc(late[0].L.label)} since ${nice(late[0].it.due)}</div>` : "";
+
+  renderAccounts(); renderCards(); renderLoans(); renderPlan(); renderTimeline();
+  $("#log").innerHTML = S.log.map(l=>`<div class="row"><div class="grow"><div class="name">${esc(l.t)}</div>
+      <div class="sub">${new Date(l.when).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</div></div></div>`
+    ).join("") || `<div class="empty">Nothing logged yet.</div>`;
+  save();
+}
+
+// count-up so a balance change is felt, not just seen
+function tween(el, to){
+  const from = Number(el.dataset.v ?? to);
+  el.dataset.v = to;
+  if(from === to || matchMedia("(prefers-reduced-motion:reduce)").matches){ el.textContent = money(to); return; }
+  const t0 = performance.now(), dur = 480;
+  const step = t => {
+    const k = Math.min(1, (t-t0)/dur), e = 1-Math.pow(1-k,3);
+    el.textContent = money(r2(from + (to-from)*e));
+    if(k<1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function renderAccounts(){
+  const m = mainAcc();
+  $("#accounts").innerHTML = parents().map(p=>{
+    const kids = kidsOf(p.id);
+    const head = `<div class="row head-row">
+        <div class="grow"><div class="name">${esc(p.name)}${p.id===m?.id?` <span class="pill">main</span>`:""}</div>
+          <div class="sub">${kids.length? `wallet ${money(p.bal)} · group ${money(groupTotal(p))}`
+                                        : ({cash:"Physical cash",gcash:"E-wallet",gotyme:"Bank"})[p.kind]}</div></div>
+        <div class="amt num">${money(p.bal)}</div>
+        ${p.id===m?.id?`<button class="iconbtn" data-add-kid="${p.id}" title="add section">+</button>`:""}
+        <button class="iconbtn" data-edit-acc="${p.id}">edit</button>
+      </div>`;
+    return head + kids.map((k,i)=>{
+      const L = loan(k.loanId);
+      const note = k.loanId==="income" ? `<span class="pill">allowance</span>` : covText(k);
+      return `<div class="row kid">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <button class="iconbtn" data-mv="${k.id}:-1" ${i===0?"disabled":""}>▲</button>
+          <button class="iconbtn" data-mv="${k.id}:1" ${i===kids.length-1?"disabled":""}>▼</button>
+        </div>
+        ${L?`<span class="dot" style="background:${colorOf(L)}"></span>`:""}
+        <div class="grow"><div class="name">${esc(k.name)}</div><div class="sub">${note}</div></div>
+        <div class="amt num">${money(k.bal)}</div>
+        ${k.loanId==="income"?"":`<button class="btn mini" data-fund="${k.id}">Fund</button>`}
+        <button class="iconbtn" data-edit-acc="${k.id}">edit</button>
+      </div>`;
+    }).join("");
+  }).join("") || `<div class="empty">No wallets yet.</div>`;
+}
+
+function renderCards(){
+  const cards = S.loans.filter(isCard);
+  $("#cardsWrap").style.display = cards.length ? "" : "none";
+  $("#cards").innerHTML = cards.map(L=>{
+    const out = outstanding(L), avail = available(L), env = envelopeFor(L.id);
+    const openDue = cycleFor(today(), L.sDay, L.dDay).due;
+    const stmts = L.items.filter(i=>i.due!==openDue);
+    const open = L.items.find(i=>i.due===openDue);
+    const billed = r2(stmts.filter(i=>!i.paid).reduce((s,i)=>s+i.amount,0));
+    const openAmt = open ? open.amount : 0;
+
+    const cyc = (it,isOpen)=>{
+      const n = daysTo(it.due);
+      const cls = it.paid ? "dim" : n<0 ? "bad" : n<=3 ? "warn" : "";
+      const when = it.paid ? "settled" : n<0 ? `${-n}d overdue` : n===0 ? "due today" : `due in ${n}d`;
+      return `<div class="cyc${isOpen?" openc":""}">
+        <div class="cychead">
+          <span class="grow"><b>${isOpen?"Open cycle":"Statement "+nice(it.stmt)}</b>
+            <span class="sub">${isOpen?`closes ${nice(it.stmt)} · `:""}pay by ${niceY(it.due)}</span></span>
+          <span class="num">${money(it.amount)}</span></div>
+        <div class="sub ${cls}">${isOpen && !it.paid ? "not billed yet" : when}</div>
+        ${purchasesIn(L,it.due).map(p=>`<div class="pur">
+            <span class="sub" style="width:52px">${nice(p.date)}</span>
+            <span class="grow">${esc(p.label)}</span>
+            <span class="num">${money(p.amount)}</span>
+            <button class="iconbtn" data-edit-pur="${L.id}:${p.id}">edit</button></div>`).join("")}
+        ${it.paid ? `<button class="btn mini" data-unpay-card="${L.id}:${it.due}" style="margin-top:9px">undo payment</button>`
+                  : `<button class="btn ${isOpen?"mini":"primary"}" data-pay-card="${L.id}:${it.due}" style="margin-top:9px">Pay ${money(it.amount)}</button>`}
+      </div>`;
+    };
+
+    return `<div class="card" style="margin-bottom:14px">
+      <div class="cardface">
+        <div class="cychead"><span class="grow eyebrow">${esc(L.provider)} · available credit</span>
+          <button class="btn mini" data-link="${L.id}">${env?`⇄ ${esc(env.name)}`:"link a wallet"}</button>
+          <button class="iconbtn" data-edit-card="${L.id}">edit</button></div>
+        <div class="avail num ${avail<0?"bad":""}">${money(avail)}</div>
+        <div class="sub">billed ${L.sDay}th, due ${L.dDay}th${env?` · funded by ${esc(env.name)}`:""}</div>
+        <div class="limitbar">
+          <i class="used" style="width:${Math.min(100, billed/L.limit*100)}%"></i>
+          <i class="open" style="width:${Math.max(0, Math.min(100-billed/L.limit*100, openAmt/L.limit*100))}%"></i></div>
+        <div class="cychead sub"><span class="grow num">${money(out)} used</span>
+          <span class="num">${money(L.limit)} limit</span></div>
+        ${out? `<div class="sub" style="margin-top:5px">
+          ${billed? `<i class="dot" style="background:var(--accent);display:inline-block;vertical-align:middle;margin-right:4px"></i>${money(billed)} billed &amp; unpaid`:""}
+          ${billed&&openAmt?" · ":""}
+          ${openAmt? `<i class="dot" style="background:var(--warn);display:inline-block;vertical-align:middle;margin-right:4px"></i>${money(openAmt)} not billed yet`:""}
+        </div>`:""}
+      </div>
+      ${stmts.map(i=>cyc(i,false)).join("")}
+      ${open ? cyc(open,true) : `<div class="empty">Nothing charged this cycle. Next statement ${niceY(cycleFor(today(),L.sDay,L.dDay).stmt)}.</div>`}
+    </div>`;
+  }).join("");
+}
+
+function renderLoans(){
+  const list = S.loans.filter(L=>!isCard(L));
+  $("#loans").innerHTML = list.map(L=>{
+    const left = unpaid(L), next = left[0], env = envelopeFor(L.id);
+    const n = next ? daysTo(next.due) : null;
+    const cls = !next ? "" : n<0 ? "bad" : n<=3 ? "warn" : "dim";
+    const when = !next ? "cleared" : n<0 ? `${-n}d overdue` : n===0 ? "due today" : `in ${n}d`;
+    return `<details><summary class="row">
+      <span class="dot" style="background:${colorOf(L)}"></span>
+      <div class="grow"><div class="name"><span class="chev">›</span> ${esc(L.provider)} · ${esc(L.label)}</div>
+        <div class="sub ${cls}">${next?`next ${niceY(next.due)} · ${when}`:"all paid"} · ${L.items.length-left.length}/${L.items.length} paid${env?` · ${esc(env.name)}`:""}</div></div>
+      <div class="amt num">${next?money(next.amount):"—"}</div>
+      <div class="sub num" style="width:76px;text-align:right">${money(r2(left.reduce((s,i)=>s+i.amount,0)))}</div>
+      </summary>
+      <div class="inst" style="border-top-style:solid">
+        <span class="grow sub">${esc(L.ref||"no ref")} · every ${L.freq==="2weeks"?"2 weeks":L.freq}</span>
+        <button class="btn mini" data-link="${L.id}">${env?`⇄ ${esc(env.name)}`:"link a wallet"}</button>
+        <button class="btn mini" data-extend="${L.id}">+ extend</button>
+        <button class="btn mini" data-del-loan="${L.id}">delete</button>
+      </div>
+      ${L.items.map((it,i)=>{
+        const dn = daysTo(it.due);
+        const c = it.paid ? "dim" : dn<0 ? "bad" : dn<=3 ? "warn" : "";
+        return `<div class="inst" style="${it.paid?"opacity:.45":""}">
+          <span class="grow ${c}">${niceY(it.due)}</span>
+          <span class="num">${money(it.amount)}</span>
+          ${it.paid?`<button class="iconbtn" data-unpay="${L.id}:${i}">undo</button>`
+                   :`<button class="btn mini" data-pay="${L.id}:${i}">Pay</button>`}
+          <button class="iconbtn" data-edit-inst="${L.id}:${i}">edit</button>
+        </div>`;}).join("")}
+      </details>`;
+  }).join("") || `<div class="empty">No instalment loans yet.</div>`;
+}
+
+function renderPlan(){
+  const days = Number($("#horizon").value);
+  const {rows, short, orphanNeed, srcs} = fundingPlan(days);
+  const need = r2(dues(days).reduce((s,d)=>s+d.it.amount,0));
+  const gapTotal = r2(rows.reduce((s,r)=>s+r.gap,0));
+
+  let html = `<div class="eyebrow">Due in window</div><div class="big num">${money(need)}</div>
+    <div class="sub">${srcs.map(a=>`${esc(a.name)} ${money(a.bal)}`).join(" · ")}</div>
+    <div class="bar"><i style="width:${need?Math.min(100,(need-gapTotal)/need*100):100}%"></i></div>`;
+
+  if(!rows.length && !orphanNeed)
+    html += `<p class="ok" style="margin-top:14px">Every envelope already holds enough. Nothing to move.</p>`;
+  else {
+    if(rows.length){
+      html += `<div class="eyebrow" style="margin:16px 0 4px">Top up from ${esc(srcs[0].name)}</div>`
+        + rows.map(r=>`<div class="move">
+            <span class="dot" style="background:${colorOf(loan(r.env.loanId))}"></span>
+            <span class="grow" style="font-size:14px">${esc(r.env.name)}
+              <span class="dim">has ${money(r.env.bal)}, needs ${money(r.need)}</span></span>
+            <span class="num${r.give<r.gap?" warn":""}">${money(r.give)}</span></div>`).join("")
+        + `<button class="btn primary" id="doPlan" style="margin-top:14px">Apply transfers</button>`;
+      if(short>0) html += `<p class="bad" style="margin-top:12px">Short ${money(short)} — ${esc(srcs[0].name)} and the main wallet cannot cover every envelope.</p>`;
+    }
+    if(orphanNeed>0) html += `<p class="warn" style="margin-top:12px;font-size:13px">${money(orphanNeed)} due on loans with no envelope — pays straight from the main wallet.</p>`;
+  }
+
+  // Grouped by loan: each payment on its own line, a subtotal per loan, the grand total last.
+  const list = dues(days), byLoan = new Map();
+  for(const d of list){
+    if(!byLoan.has(d.L.id)) byLoan.set(d.L.id, {L:d.L, its:[]});
+    byLoan.get(d.L.id).its.push(d.it);
+  }
+  if(byLoan.size) html += `<div class="eyebrow" style="margin:18px 0 2px">Covering</div>`
+    + [...byLoan.values()].map(g=>{
+      const sub = r2(g.its.reduce((s,i)=>s+i.amount,0));
+      return `<div class="grp">
+        <div class="top"><span class="dot" style="background:${colorOf(g.L)}"></span>
+          <span class="grow">${esc(g.L.label)}</span>
+          <span class="cnt">×${g.its.length}</span>
+          <span class="num"><b>${money(sub)}</b></span></div>
+        ${g.its.map(i=>`<div class="line"><span class="grow">${niceY(i.due)}${daysTo(i.due)<0?' <b class="bad">late</b>':""}</span>
+          <span class="num">${money(i.amount)}</span></div>`).join("")}
+      </div>`;
+    }).join("")
+    + `<div class="grand"><span class="grow eyebrow">Grand total · ${list.length} payments</span>
+        <span class="num" style="font-size:18px">${money(need)}</span></div>`;
+
+  $("#plan").innerHTML = html;
+  const b = $("#doPlan");
+  if(b) b.onclick = ()=>{
+    for(const r of rows){
+      let want = r.give;
+      for(const s of srcs){
+        if(want<=0) break;
+        const take = r2(Math.min(s.bal, want));
+        if(take<=0) continue;
+        s.bal = r2(s.bal-take); r.env.bal = r2(r.env.bal+take); want = r2(want-take);
+        logIt(`Funded ${r.env.name} ${money(take)} from ${s.name}`);
+      }
+    }
+    render();
+  };
+}
+
+const TL_MONTHS = 2;
+function renderTimeline(){
+  const sel = $("#tlFilter"), keep = sel.value;
+  sel.innerHTML = `<option value="">All loans</option>` + S.loans.map(L=>`<option value="${L.id}">${esc(L.label)}</option>`).join("");
+  sel.value = S.loans.some(L=>L.id===keep) ? keep : "";
+  const only = sel.value ? loan(sel.value) : null;
+
+  const byDate = new Map();
+  for(const {L,it} of dues(9999, only)){
+    if(!byDate.has(it.due)) byDate.set(it.due, []);
+    byDate.get(it.due).push({L,it});
+  }
+  if(!byDate.size){ $("#timeline").innerHTML = `<div class="empty">Nothing scheduled.</div>`; return; }
+
+  const dates = [...byDate.keys()].sort();
+  const totalOf = d => r2(byDate.get(d).reduce((s,x)=>s+x.it.amount,0));
+  const grand = r2(dates.reduce((s,d)=>s+totalOf(d),0));
+  const shown = only ? [only] : S.loans.filter(L=>unpaid(L).length);
+  const short = n => n>=1000 ? (n/1000).toFixed(n>=10000?0:1)+"k" : Math.round(n);
+
+  // Only the next two months fit on a screen without scrolling; the rest is summarised below.
+  const allMonths = [...new Set(dates.map(d=>d.slice(0,7)))];
+  const months = allMonths.slice(0, TL_MONTHS);
+  const beyond = dates.filter(d=>!months.includes(d.slice(0,7)));
+
+  let html = `<div class="legend">${shown.map(L=>`<span><i class="dot" style="background:${colorOf(L)}"></i>${esc(L.label)}</span>`).join("")}
+    <span style="margin-left:auto" class="num">${money(grand)} left</span></div>`;
+
+  const next = dates[0];
+  html += `<div class="nextup"><span class="grow">Next up · <b>${niceY(next)}</b>
+      <span class="sub">${daysTo(next)<0?`${-daysTo(next)}d overdue`:daysTo(next)===0?"today":`in ${daysTo(next)} days`}</span></span>
+      <span class="num">${money(totalOf(next))}</span></div>`;
+
+  html += months.map(ym=>{
+    const inMonth = dates.filter(d=>d.startsWith(ym));
+    const mTotal = r2(inMonth.reduce((s,d)=>s+totalOf(d),0));
+    const first = ym+"-01";
+    const pad = new Date(first+"T00:00:00").getDay();
+    const dim = new Date(+ym.slice(0,4), +ym.slice(5,7), 0).getDate();
+    const cells = Array(pad).fill(`<div class="day blank"></div>`);
+    for(let n=1; n<=dim; n++){
+      const d = dayOf(first,n), hit = byDate.get(d);
+      if(!hit){ cells.push(`<div class="day"><span class="n">${n}</span></div>`); continue; }
+      const cls = ["day","has", daysTo(d)<0?"late":"", d===today()?"today":""].filter(Boolean).join(" ");
+      cells.push(`<div class="${cls}" title="${hit.map(x=>esc(x.L.label)+" "+money(x.it.amount)).join(" · ")}">
+        <span class="n">${n}</span>
+        <span class="dots">${hit.map(x=>`<i style="background:${colorOf(x.L)}"></i>`).join("")}</span>
+        <span class="a num">${short(totalOf(d))}</span></div>`);
+    }
+    return `<div class="mon">
+      <div class="monhead"><b class="grow">${monthName(first)}</b><span class="num sub">${money(mTotal)}</span></div>
+      <div class="dow"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+      <div class="days">${cells.join("")}</div></div>`;
+  }).join("");
+
+  if(beyond.length) html += `<div class="tlfoot"><span class="grow">+ ${beyond.length} more payment${beyond.length>1?"s":""}
+      after ${monthName(months[months.length-1]+"-01")}, through ${niceY(beyond[beyond.length-1])}</span>
+      <span class="num">${money(r2(beyond.reduce((s,d)=>s+totalOf(d),0)))}</span></div>`;
+  $("#timeline").innerHTML = html;
+}
+
+// ---------- dialog ----------
+function ask(title, fields, onOk){
+  const f = $("#dlgForm");
+  f.innerHTML = `<h3>${esc(title)}</h3>` + (fields.hint?`<p class="hint">${fields.hint}</p>`:"") + fields.map(x=>{
+    if(x.type==="select") return `<label><span class="eyebrow">${x.label}</span><select name="${x.name}">${
+      x.options.map(o=>`<option value="${esc(o.v)}"${String(o.v)===String(x.value)?" selected":""}>${esc(o.t)}</option>`).join("")}</select></label>`;
+    return `<label><span class="eyebrow">${x.label}</span><input name="${x.name}" type="${x.type||"text"}"
+      ${x.type==="number"?'step="0.01" inputmode="decimal"':""} value="${esc(x.value??"")}" ${x.required?"required":""}></label>`;
+  }).join("") + `<div class="dact">
+      ${fields.del?`<button value="del" class="btn ghost bad" style="margin-right:auto">Delete</button>`:""}
+      <button value="cancel" class="btn" formnovalidate>Cancel</button><button value="ok" class="btn primary">Save</button></div>`;
+  $("#dlg").showModal();
+  f.onsubmit = () => { const data = Object.fromEntries(new FormData(f));
+    setTimeout(()=>onOk($("#dlg").returnValue, data),0); };
+}
+const loanOptions = () => [{v:"",t:"— not linked —"},{v:"income",t:"Allowance pool (money comes from here)"},
+  ...S.loans.map(L=>({v:L.id,t:`${L.provider} · ${L.label}`}))];
+const allAccOptions = () => S.accounts.map(a=>({v:a.id,t:`${a.parent?acc(a.parent).name+" / ":""}${a.name} (${money(a.bal)})`}));
+const srcOptions = () => [incomeAcc(), mainAcc(), ...parents().filter(p=>p!==mainAcc())]
+  .filter((a,i,arr)=>a && arr.indexOf(a)===i).map(a=>({v:a.id,t:`${a.name} (${money(a.bal)})`}));
+
+// ---------- welcome ----------
+$("#wStart").onclick = ()=>{ S = starter(); logIt("Started a new ledger"); render(); };
+$("#wDemo").onclick  = ()=>{ S = demoData(); render(); };
+$("#wImport").onclick = ()=> $("#importFile").click();
+
+// ---------- actions ----------
+$("#addAcc").onclick = ()=> addSection(mainAcc()?.id);
+function addSection(parentId){
+  const p = acc(parentId);
+  if(!p) return alert("Add a wallet first.");
+  const f = [{name:"name",label:"Name",required:1},
+             {name:"loanId",label:"What it is for",type:"select",options:loanOptions()},
+             {name:"bal",label:"Starting balance",type:"number",value:"0"}];
+  f.hint = `Sections live inside ${p.name} and hold money the main wallet cannot spend.`;
+  ask(`New section under ${p.name}`, f, (v,d)=>{ if(v!=="ok") return;
+    S.accounts.push({id:uid(), parent:p.id, name:d.name, kind:p.kind, bal:r2(d.bal), loanId:d.loanId});
+    logIt(`Added section ${d.name}`); render(); });
+}
+
+$("#addLoan").onclick = ()=> ask("New instalment loan",[
+  {name:"provider",label:"Lender",value:"BillEase"},
+  {name:"label",label:"What for",required:1},
+  {name:"ref",label:"Reference #",value:""},
+  {name:"freq",label:"Schedule",type:"select",options:[{v:"week",t:"Every week"},{v:"2weeks",t:"Every 2 weeks"},{v:"month",t:"Every month"}],value:"week"},
+  {name:"amount",label:"Amount per instalment",type:"number",required:1},
+  {name:"count",label:"How many instalments",type:"number",value:"4",required:1},
+  {name:"start",label:"First due date",type:"date",value:today(),required:1}],
+  (v,d)=>{ if(v!=="ok") return;
+    S.loans.push({id:uid(), provider:d.provider||"Loan", label:d.label, ref:d.ref, freq:d.freq,
+                  items:gen(d.start, +d.count, d.freq, +d.amount)});
+    logIt(`Added loan ${d.label}`); render(); });
+
+$("#addCard").onclick = ()=> ask("New credit card",[
+  {name:"provider",label:"Issuer",value:"Atome"},
+  {name:"label",label:"Card name",value:"Card",required:1},
+  {name:"limit",label:"Credit limit",type:"number",required:1},
+  {name:"sDay",label:"Billed on day of month",type:"number",value:"9",required:1},
+  {name:"dDay",label:"Due on day of month",type:"number",value:"19",required:1}],
+  (v,d)=>{ if(v!=="ok") return;
+    S.loans.push(rebuildCard({id:uid(), provider:d.provider||"Card", label:d.label, ref:"", freq:"card",
+      limit:r2(d.limit), sDay:+d.sDay, dDay:+d.dDay, items:[], purchases:[]}));
+    logIt(`Added card ${d.label}`); render(); });
+
+$("#addPurchase").onclick = ()=>{
+  const cards = S.loans.filter(isCard);
+  if(!cards.length) return alert("Add a card first.");
+  ask("New purchase",[
+    ...(cards.length>1?[{name:"card",label:"Card",type:"select",options:cards.map(c=>({v:c.id,t:c.label}))}]:[]),
+    {name:"label",label:"What did you buy",required:1},
+    {name:"amount",label:"Amount",type:"number",required:1},
+    {name:"date",label:"Date",type:"date",value:today(),required:1}],
+    (v,d)=>{ if(v!=="ok") return;
+      const L = cards.length>1 ? loan(d.card) : cards[0], amt = r2(d.amount);
+      if(amt > available(L) && !confirm(`That is ${money(r2(amt-available(L)))} over the available credit. Add anyway?`)) return;
+      L.purchases.push({id:uid(), date:d.date, label:d.label, amount:amt});
+      rebuildCard(L);
+      logIt(`${L.provider}: ${d.label} ${money(amt)} · due ${niceY(cycleFor(d.date,L.sDay,L.dDay).due)}`);
+      render(); });
+};
+
+function reorder(id, dir){
+  const a = acc(id), sibs = kidsOf(a.parent);
+  const at = sibs.indexOf(a), to = at + dir;
+  if(to < 0 || to >= sibs.length) return;
+  const i = S.accounts.indexOf(a), j = S.accounts.indexOf(sibs[to]);
+  S.accounts[i] = sibs[to]; S.accounts[j] = a;
+  render();
+}
+
+document.body.addEventListener("click", e=>{
+  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link]");
+  if(!t) return;
+  const pick = k => { const [id,i] = (t.dataset[k]||"").split(":"); return [loan(id), +i]; };
+  const pickCard = k => { const [id,key] = (t.dataset[k]||"").split(":"); return [loan(id), key]; };
+  e.preventDefault();
+
+  // Pick the funding wallet from the loan's own side. One wallet per loan, so linking moves it.
+  if(t.dataset.link){
+    const L = loan(t.dataset.link), cur = envelopeFor(L.id);
+    const pickable = kidsOf(mainAcc()?.id).filter(a=>a.loanId!=="income");
+    if(!pickable.length) return alert("Add a section under your main wallet first.");
+    ask(`Which wallet pays ${L.label}?`,[{name:"env",label:"Section",type:"select",value:cur?.id||"",
+      options:[{v:"",t:"— none, pays from the main wallet —"},
+        ...pickable.map(a=>({v:a.id, t:`${a.name} (${money(a.bal)})${a.loanId&&a.loanId!==L.id?" — taken by "+(loan(a.loanId)?.label||"?"):""}`}))]}],
+      (v,d)=>{ if(v!=="ok") return;
+        S.accounts.forEach(a=>{ if(a.loanId===L.id) a.loanId=""; });
+        if(d.env){ acc(d.env).loanId = L.id; logIt(`${acc(d.env).name} now funds ${L.label}`); }
+        else logIt(`${L.label} unlinked`);
+        render(); });
+  }
+
+  if(t.dataset.addKid) addSection(t.dataset.addKid);
+  if(t.dataset.mv){ const [id,dir] = t.dataset.mv.split(":"); reorder(id, +dir); }
+
+  if(t.dataset.editCard){
+    const L = loan(t.dataset.editCard);
+    const f = [{name:"label",label:"Name",value:L.label},
+      {name:"limit",label:"Credit limit",type:"number",value:L.limit},
+      {name:"sDay",label:"Billed on day",type:"number",value:L.sDay},
+      {name:"dDay",label:"Due on day",type:"number",value:L.dDay}];
+    f.del = true;
+    ask("Edit "+L.label, f, (v,d)=>{
+      if(v==="del"){ if(!confirm(`Delete ${L.label} and every purchase on it?`)) return;
+        S.loans = S.loans.filter(x=>x.id!==L.id);
+        S.accounts.forEach(a=>{ if(a.loanId===L.id) a.loanId=""; });
+        return render(); }
+      if(v!=="ok") return;
+      L.label=d.label; L.limit=r2(d.limit); L.sDay=+d.sDay; L.dDay=+d.dDay; rebuildCard(L); render(); });
+  }
+
+  if(t.dataset.editPur){
+    const [L,pid] = pickCard("editPur"), p = L.purchases.find(x=>x.id===pid);
+    const f = [{name:"label",label:"What",value:p.label},{name:"amount",label:"Amount",type:"number",value:p.amount},
+               {name:"date",label:"Date",type:"date",value:p.date}];
+    f.del = true;
+    ask("Edit purchase", f, (v,d)=>{
+      if(v==="del"){ L.purchases = L.purchases.filter(x=>x.id!==pid); rebuildCard(L); return render(); }
+      if(v!=="ok") return;
+      p.label=d.label; p.amount=r2(d.amount); p.date=d.date; rebuildCard(L); render(); });
+  }
+
+  if(t.dataset.payCard){
+    const [L,due] = pickCard("payCard"), it = L.items.find(i=>i.due===due), env = envelopeFor(L.id);
+    const f = [{name:"src",label:"From",type:"select",options:allAccOptions(),value:(env||mainAcc()).id},
+               {name:"amount",label:"Amount",type:"number",value:it.amount}];
+    f.hint = "Pay less than the statement and the rest carries to the next cycle.";
+    ask(`Pay ${L.label} · ${niceY(it.due)}`, f, (v,dd)=>{ if(v!=="ok") return;
+      const a = acc(dd.src), amt = r2(dd.amount), rest = r2(it.amount - amt);
+      a.bal = r2(a.bal - amt); it.paid = true;
+      if(rest > 0){
+        L.purchases.push({id:uid(), date:addDays(it.due,1), label:`Carried from ${nice(it.due)}`, amount:rest});
+        logIt(`${L.label}: ${money(rest)} carried to the next cycle`);
+      }
+      logIt(`Paid ${L.label} ${money(amt)} from ${a.name}`);
+      rebuildCard(L); render(); });
+  }
+  if(t.dataset.unpayCard){
+    const [L,due] = pickCard("unpayCard"), it = L.items.find(i=>i.due===due);
+    if(it){ it.paid = false; render(); }
+  }
+
+  if(t.dataset.fund){
+    const env = acc(t.dataset.fund), L = loan(env.loanId);
+    const gap = L ? r2(dues(Number($("#horizon").value), L).reduce((s,d)=>s+d.it.amount,0) - env.bal) : 0;
+    const f = [{name:"src",label:"Take from",type:"select",options:srcOptions(),value:incomeAcc()?.id},
+               {name:"amount",label:"Amount",type:"number",value:Math.max(0,gap) || "",required:1}];
+    f.hint = L ? `${env.name} holds ${money(env.bal)}. Suggested tops it up for the window.` : "";
+    ask(`Fund ${env.name}`, f, (v,d)=>{ if(v!=="ok") return;
+      const s = acc(d.src), amt = r2(d.amount);
+      s.bal = r2(s.bal-amt); env.bal = r2(env.bal+amt);
+      logIt(`Funded ${env.name} ${money(amt)} from ${s.name}`); render(); });
+  }
+
+  if(t.dataset.editAcc){
+    const a = acc(t.dataset.editAcc), kids = kidsOf(a.id);
+    const f = [{name:"name",label:"Name",value:a.name},
+               {name:"bal",label:"Balance (set to what the app shows)",type:"number",value:a.bal}];
+    if(a.parent) f.splice(1,0,{name:"loanId",label:"What it is for",type:"select",options:loanOptions(),value:a.loanId});
+    f.del = true;
+    ask("Edit "+a.name, f, (v,d)=>{
+      if(v==="del"){
+        if(kids.length && !confirm(`${a.name} has ${kids.length} section(s). Delete them too?`)) return;
+        S.accounts = S.accounts.filter(x=>x.id!==a.id && x.parent!==a.id);
+        logIt(`Removed ${a.name}`); return render();
+      }
+      if(v!=="ok") return;
+      if(r2(d.bal)!==a.bal) logIt(`${a.name}: ${money(a.bal)} → ${money(r2(d.bal))}`);
+      a.name=d.name; a.bal=r2(d.bal); if("loanId" in d) a.loanId=d.loanId; render(); });
+  }
+
+  if(t.dataset.pay){
+    const [L,i] = pick("pay"), it = L.items[i], env = envelopeFor(L.id);
+    ask(`Pay ${L.label}`,[
+      {name:"src",label:"From",type:"select",options:allAccOptions(),value:(env||mainAcc()).id},
+      {name:"amount",label:"Amount",type:"number",value:it.amount}],
+      (v,dd)=>{ if(v!=="ok") return;
+        const a = acc(dd.src), amt = r2(dd.amount);
+        a.bal = r2(a.bal - amt); it.paid = true; it.amount = amt;
+        logIt(`Paid ${L.label} ${money(amt)} from ${a.name}`); render(); });
+  }
+  if(t.dataset.unpay){ const [L,i]=pick("unpay"); L.items[i].paid=false; render(); }
+  if(t.dataset.editInst){
+    const [L,i] = pick("editInst"), it = L.items[i];
+    const f = [{name:"due",label:"Due date",type:"date",value:it.due},{name:"amount",label:"Amount",type:"number",value:it.amount}];
+    f.del = true;
+    ask("Edit instalment", f, (v,d)=>{
+      if(v==="del"){ L.items.splice(i,1); return render(); }
+      if(v!=="ok") return;
+      it.due = d.due; it.amount = r2(d.amount);
+      L.items.sort((a,b)=> a.due<b.due?-1:1); render(); });
+  }
+  if(t.dataset.extend){
+    const L = loan(t.dataset.extend), last = L.items[L.items.length-1];
+    if(!last) return alert("Nothing to extend from.");
+    ask("Extend "+L.label,[{name:"count",label:"Add how many",type:"number",value:"4",required:1},
+                           {name:"amount",label:"Amount each",type:"number",value:last.amount}],
+      (v,d)=>{ if(v!=="ok") return;
+        const from = L.freq==="week" ? addDays(last.due,7) : L.freq==="2weeks" ? addDays(last.due,14) : addMonths(last.due,1);
+        L.items.push(...gen(from, +d.count, L.freq, +d.amount)); render(); });
+  }
+  if(t.dataset.delLoan){
+    const L = loan(t.dataset.delLoan);
+    if(confirm(`Delete ${L.provider} ${L.label} and its whole schedule?`)){
+      S.loans = S.loans.filter(x=>x.id!==L.id);
+      S.accounts.forEach(a=>{ if(a.loanId===L.id) a.loanId=""; });
+      logIt(`Deleted loan ${L.label}`); render(); }
+  }
+});
+
+$("#moveBtn").onclick = ()=>{
+  ask("Move money",[
+    {name:"from",label:"From",type:"select",options:allAccOptions(),value:incomeAcc()?.id},
+    {name:"to",label:"To",type:"select",options:allAccOptions(),value:mainAcc()?.id},
+    {name:"amount",label:"Amount",type:"number",required:1}],
+    (v,d)=>{ if(v!=="ok"||d.from===d.to) return;
+      const a=acc(d.from), b=acc(d.to), amt=r2(d.amount);
+      a.bal=r2(a.bal-amt); b.bal=r2(b.bal+amt);
+      logIt(`Moved ${money(amt)}: ${a.name} → ${b.name}`); render(); });
+};
+
+$("#horizon").onchange = renderPlan;
+$("#tlFilter").onchange = renderTimeline;
+$("#clearLog").onclick = ()=>{ S.log=[]; render(); };
+$("#exportBtn").onclick = ()=>{
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:"application/json"}));
+  a.download = `ledger-${today()}.json`; a.click(); URL.revokeObjectURL(a.href);
+};
+$("#importBtn").onclick = ()=> $("#importFile").click();
+$("#importFile").onchange = async e=>{
+  const f = e.target.files[0]; if(!f) return;
+  try{ const s = JSON.parse(await f.text());
+       if(!Array.isArray(s.accounts)) throw new Error("this is not a ledger backup");
+       S = migrate(s); logIt("Imported a backup"); render(); }
+  catch(err){ alert("Import failed: " + err.message); }
+  e.target.value = "";
+};
+$("#resetBtn").onclick = ()=>{ if(confirm("Erase everything stored in this browser?")){ S = blank(); save(); render(); } };
+
+if("serviceWorker" in navigator) addEventListener("load", ()=> navigator.serviceWorker.register("sw.js").catch(()=>{}));
+
+// ---------- self-check: open with ?test ----------
+function demo(){
+  const ok = (c,m,x) => { if(!c) console.error("FAIL:",m,x??""); else console.log("ok:",m); };
+  ok(addMonths("2026-01-31",1)==="2026-02-28", "month clamps to short month");
+  ok(addDays("2026-08-31",7)==="2026-09-07", "week crosses month");
+  ok(gen("2026-08-10",4,"2weeks",1322.93).map(x=>x.due).join()==="2026-08-10,2026-08-24,2026-09-07,2026-09-21",
+     "biweekly schedule");
+  ok(cycleFor("2026-08-05",9,19).due==="2026-08-19", "buy before the 9th bills this month");
+  ok(cycleFor("2026-08-09",9,19).due==="2026-09-19", "buy on the 9th rolls to next statement");
+  ok(cycleFor("2026-12-20",9,19).due==="2027-01-19", "cycle rolls across the year");
+
+  const save0 = S;
+  S = {v:DATA_V, log:[], accounts:[
+    {id:"m",parent:null,name:"Main",kind:"gotyme",bal:0,loanId:""},
+    {id:"i",parent:"m",name:"Myself",kind:"gotyme",bal:2000,loanId:"income"},
+    {id:"k",parent:"m",name:"Key",kind:"gotyme",bal:495.39,loanId:"K"},
+    {id:"n",parent:"m",name:"Mon",kind:"gotyme",bal:0,loanId:"C"}],
+   loans:[
+    {id:"K",provider:"BillEase",label:"Key",ref:"",freq:"week",items:gen("2026-08-17",14,"week",40.21)},
+    {id:"C",provider:"BillEase",label:"Cash-in",ref:"",freq:"2weeks",items:gen("2026-08-24",3,"2weeks",1322.93)}]};
+  const key = acc("k"), mon = acc("n");
+  ok(coverage(key).n===12 && !coverage(key).done, "495.39 covers 12 of 14", coverage(key));
+  ok(r2(14*40.21-495.39)===67.55, "gap to cover the whole run");
+  ok(covText(key).includes("12/14") && covText(key).includes("67.55"), "coverage reads n/max plus the gap", covText(key));
+  ok(covText(mon).includes("0/3") && covText(mon).includes("3,968.79"), "empty envelope shows both shortfalls", covText(mon));
+  ok(covText({...key, bal:9999}).includes("14/14"), "fully funded reads n/n");
+  ok(r2(3*1322.93)===3968.79, "cash-in remaining");
+
+  const card = rebuildCard({id:"X",freq:"card",limit:8480,sDay:9,dDay:19,items:[],
+    purchases:[{id:"1",date:"2026-08-11",label:"a",amount:1410.39},{id:"2",date:"2026-08-12",label:"b",amount:89.61}]});
+  ok(card.items.length===1 && card.items[0].amount===1500, "same-cycle purchases merge", card.items);
+  ok(available(card)===6980, "available credit = limit - outstanding", available(card));
+  ok(migrate({accounts:[],loans:[],log:[]}).v===DATA_V, "migration stamps the version");
+  ok(r2(0.1+0.2)===0.3, "rounding");
+  S = save0;
+}
+if(location.search.includes("test")) demo();
+
+render();
+addEventListener("load", ()=> setTimeout(()=>document.body.classList.remove("boot"), 1400));
+</script>
+</body>
+</html>

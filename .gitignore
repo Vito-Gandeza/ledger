@@ -1,0 +1,9 @@
+# Never commit personal financial data — backups belong outside this repo.
+# (manifest.webmanifest is not .json, so it is unaffected.)
+*.json
+ledger-*.json
+
+.DS_Store
+Thumbs.db
+.vercel/
+node_modules/
