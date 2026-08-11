@@ -50,7 +50,7 @@ h3{font-weight:500; font-size:18px}
    rendering stacked on top of each other on mobile: this base rule was missing, so only
    the two wider @media breakpoints below ever defined the areas at all. */
 .dash{display:grid; gap:30px 26px; align-items:start; grid-template-columns:minmax(0,1fr);
-  grid-template-areas:"hero" "plan" "timeline" "weekly" "wallets" "cards" "loans" "log" "foot";}
+  grid-template-areas:"wallets" "cards" "hero" "plan" "timeline" "weekly" "loans" "log" "foot";}
 .dash > *{min-width:0}
 .a-hero{grid-area:hero} .a-plan{grid-area:plan} .a-timeline{grid-area:timeline} .a-weekly{grid-area:weekly}
 .a-wallets{grid-area:wallets} .a-cards{grid-area:cards} .a-loans{grid-area:loans}
