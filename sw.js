@@ -1,6 +1,8 @@
-// Offline shell. Serves from cache instantly, then refreshes it in the background,
-// so the app opens with no signal and still picks up new deploys on the next visit.
-const CACHE = "ledger-v1";
+// Offline shell. The HTML document is fetched fresh every load (falling back to cache only
+// when there's no signal) so a shipped fix is never stuck behind a stale cached copy — that
+// exact staleness (cache-first on index.html) was why earlier fixes didn't visibly land.
+// Static assets (icon, manifest) stay cache-first since they rarely change.
+const CACHE = "ledger-v2";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", e => {
@@ -17,15 +19,17 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET" || new URL(e.request.url).origin !== location.origin) return;
+  const isDoc = e.request.mode === "navigate" || e.request.destination === "document";
   e.respondWith(
-    caches.match(e.request).then(hit => {
-      const live = fetch(e.request)
-        .then(res => {
-          if (res && res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone()));
-          return res;
+    isDoc
+      ? fetch(e.request)
+          .then(res => { if (res && res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone())); return res; })
+          .catch(() => caches.match(e.request))
+      : caches.match(e.request).then(hit => {
+          const live = fetch(e.request)
+            .then(res => { if (res && res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone())); return res; })
+            .catch(() => hit);
+          return hit || live;
         })
-        .catch(() => hit);
-      return hit || live;
-    })
   );
 });
