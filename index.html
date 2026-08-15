@@ -438,18 +438,41 @@ function demoData(){
 }
 
 // Saved data survives upgrades — balances you already edited are never overwritten.
+// Every field is coerced to its expected type: a corrupted or hand-edited backup should
+// degrade to sane defaults, never poison the render pipeline with undefined/NaN.
 function migrate(s){
-  s.accounts ??= []; s.loans ??= []; s.log ??= []; s.allowance ??= null;
+  if(!s || typeof s !== "object") s = {};
+  if(!Array.isArray(s.accounts)) s.accounts = [];
+  if(!Array.isArray(s.loans))    s.loans = [];
+  if(!Array.isArray(s.log))      s.log = [];
+  s.accounts = s.accounts.filter(a=>a && typeof a==="object" && a.id).map(a=>({
+    ...a, name:String(a.name ?? "Untitled"), bal:r2(a.bal),
+    parent:a.parent || null, loanId:a.loanId ?? "", kind:a.kind || "gotyme",
+  }));
+  // An orphan (parent id pointing at a deleted account) would vanish from the UI entirely,
+  // since it is neither a parent nor anyone's child. Promote it to top level instead.
+  const ids = new Set(s.accounts.map(a=>a.id));
+  for(const a of s.accounts) if(a.parent && !ids.has(a.parent)) a.parent = null;
   for(const L of s.loans){
-    if(isCard(L)){ L.purchases ??= []; rebuildCard(L); }
-    else L.items ??= [];
+    if(isCard(L)){ if(!Array.isArray(L.purchases)) L.purchases = []; L.sDay = +L.sDay || 9; L.dDay = +L.dDay || 19; L.limit = r2(L.limit); rebuildCard(L); }
+    else if(!Array.isArray(L.items)) L.items = [];
   }
+  s.allowance = normAllowance(s.allowance);
   s.v = DATA_V;
   return s;
 }
 
 // S.allowance = {weekday:0-6 (Sun=0), amount, lastAdded:"YYYY-MM-DD"|""} | null
 const WEEKDAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+// Anything partial, out-of-range, or non-numeric collapses to null (= "no schedule"),
+// so downstream math can trust weekday is 0-6 and amount is a real number.
+function normAllowance(a){
+  if(!a || typeof a !== "object") return null;
+  const weekday = Number(a.weekday), amount = r2(a.amount);
+  if(!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return null;
+  if(!Number.isFinite(amount) || amount <= 0) return null;
+  return {weekday, amount, lastAdded: typeof a.lastAdded === "string" ? a.lastAdded : ""};
+}
 function isAllowanceDay(){ return !!S.allowance && new Date().getDay()===S.allowance.weekday && S.allowance.lastAdded!==today(); }
 // Days until the next scheduled allowance — the window "safe to spend" and the weekly
 // outlook both use. No schedule set = a plain 7-day week, same idea without the exact date.
@@ -624,21 +647,36 @@ function fundingPlan(days){
 
 // ---------- render ----------
 let booted = false;
+// The crossfade is decoration and must NEVER be load-bearing. startViewTransition can abort
+// ("InvalidStateError: Transition was aborted because of invalid state" — e.g. a hidden
+// document or an overlapping transition) and then never invoke its update callback, which
+// silently skipped paint() entirely: state changed, UI froze, and because
+// body[data-state=empty] hides .dash, the whole dashboard disappeared and its buttons went
+// dead. paint() is now guaranteed to run whether or not the transition survives.
 function render(){
-  const go = ()=>{ paint(); };
-  // Skip the crossfade while the entrance animation is still playing (body.boot) — a sync
-  // pull landing mid-animation was stacking a full-page View Transition snapshot on top of
-  // the per-row rise animation, which is what produced the smeared/doubled text.
+  let painted = false;
+  const go = ()=>{ painted = true; paint(); };
   const midEntrance = document.body.classList.contains("boot");
-  if(booted && !midEntrance && document.startViewTransition && !matchMedia("(prefers-reduced-motion:reduce)").matches)
-    document.startViewTransition(go);
-  else go();
+  const canAnimate = booted && !midEntrance && document.startViewTransition
+    && document.visibilityState === "visible"
+    && !matchMedia("(prefers-reduced-motion:reduce)").matches;
   booted = true;
+  if(!canAnimate) return go();
+  try{
+    const t = document.startViewTransition(go);
+    // Rejects if the transition is aborted before the callback runs — repaint directly then.
+    // Also swallows what would otherwise surface as an unhandled promise rejection.
+    t.updateCallbackDone?.catch(()=>{ if(!painted) go(); });
+    t.ready?.catch(()=>{});
+    t.finished?.catch(()=>{});
+  } catch(e){ if(!painted) go(); }
 }
 
 function paint(){
   document.body.dataset.state = (S.accounts.length || S.loans.length) ? "ready" : "empty";
-  if(document.body.dataset.state === "empty"){ save(); return; }
+  // Reset the flag on the way out too, or a suppressed undo checkpoint would leak into
+  // whatever the next paint happens to be and silently swallow that checkpoint instead.
+  if(document.body.dataset.state === "empty"){ save(); suppressHistory = false; return; }
 
   const assets = r2(S.accounts.reduce((s,a)=>s+a.bal,0));
   const owed   = r2(S.loans.reduce((s,L)=>s+unpaid(L).reduce((t,i)=>t+i.amount,0),0));
@@ -649,8 +687,8 @@ function paint(){
 
   // Safe to spend = allowance left after every envelope is topped up before the next allowance
   // lands (defaults to a plain 7-day week if no allowance schedule is set).
-  const window = daysUntilAllowance();
-  const gaps = r2(fundingPlan(window).rows.reduce((s,r)=>s+r.gap,0));
+  const horizonDays = daysUntilAllowance(); // never name this `window` — it shadows the global
+  const gaps = r2(fundingPlan(horizonDays).rows.reduce((s,r)=>s+r.gap,0));
   const safe = r2((incomeAcc()?.bal || 0) - gaps);
   tween($("#safe"), safe);
   $("#safe").className = "v num " + (safe<0 ? "bad" : safe===0 ? "warn" : "ok");
@@ -677,23 +715,23 @@ function paint(){
       <div class="sub">${new Date(l.when).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</div></div></div>`
     ).join("") || `<div class="empty">Nothing logged yet.</div>`;
   save(); renderSyncBtn(); queuePush(); pushHistory();
-  const u = $("#undoBtn"); if(u) u.disabled = history.length < 2;
+  const u = $("#undoBtn"); if(u) u.disabled = undoStack.length < 2;
 }
 
 // ---------- undo ----------
 // Every render() call follows a real data change, so a state snapshot at the end of each
 // one is a natural checkpoint. "Undo" just steps back one.
-let history = [], suppressHistory = false;
+let undoStack = [], suppressHistory = false;
 function pushHistory(){
   if(suppressHistory){ suppressHistory = false; return; }
-  history.push(JSON.stringify(S));
-  if(history.length > 25) history.shift();
+  undoStack.push(JSON.stringify(S));
+  if(undoStack.length > 25) undoStack.shift();
 }
 function undo(){
-  if(history.length < 2) return;
-  history.pop();
+  if(undoStack.length < 2) return;
+  undoStack.pop();
   suppressHistory = true;
-  S = migrate(JSON.parse(history[history.length - 1]));
+  S = migrate(JSON.parse(undoStack[undoStack.length - 1]));
   render();
 }
 
@@ -1187,15 +1225,18 @@ document.body.addEventListener("click", e=>{
       if(r2(d.bal)!==a.bal) logIt(`${a.name}: ${money(a.bal)} → ${money(r2(d.bal))}`);
       a.name=d.name; a.bal=r2(d.bal); if("loanId" in d) a.loanId=d.loanId;
       if(isAllowanceAcc){
-        if(d.aday!=="" && d.aamt){ S.allowance = {weekday:+d.aday, amount:r2(d.aamt), lastAdded:S.allowance?.lastAdded||""}; logIt(`Allowance set: ${money(r2(d.aamt))} every ${WEEKDAYS[+d.aday]}`); }
+        const next = normAllowance({weekday:d.aday, amount:d.aamt, lastAdded:S.allowance?.lastAdded||""});
+        if(next){ S.allowance = next; logIt(`Allowance set: ${money(next.amount)} every ${WEEKDAYS[next.weekday]}`); }
         else if(S.allowance){ S.allowance = null; logIt("Allowance schedule cleared"); }
       }
       render(); });
   }
   if(t.hasAttribute("data-add-allowance")){
     const a = incomeAcc();
-    a.bal = r2(a.bal + S.allowance.amount); S.allowance.lastAdded = today();
-    logIt(`Added weekly allowance ${money(S.allowance.amount)} to ${a.name}`); render();
+    if(a && S.allowance){
+      a.bal = r2(a.bal + S.allowance.amount); S.allowance.lastAdded = today();
+      logIt(`Added weekly allowance ${money(S.allowance.amount)} to ${a.name}`); render();
+    }
   }
   if(t.dataset.xfer) openMove(t.dataset.xfer);
 
@@ -1247,6 +1288,8 @@ function openMove(fromId){
     {name:"amount",label:"Amount",type:"number",required:1}],
     (v,d)=>{ if(v!=="ok"||d.from===d.to) return;
       const a=acc(d.from), b=acc(d.to), amt=r2(d.amount);
+      // Only .bal is touched — parent, kind and loanId links survive a transfer untouched.
+      if(!a || !b || !(amt > 0)) return;
       a.bal=r2(a.bal-amt); b.bal=r2(b.bal+amt);
       logIt(`Moved ${money(amt)}: ${a.name} → ${b.name}`); render(); });
 }
@@ -1346,16 +1389,69 @@ function demo(){
   ok(r2(S.accounts.reduce((s,a)=>s+a.bal,0) + wk[0].income - wk[0].obligations)===wk[0].bal, "running balance = start + income - obligations");
   S.allowance = null;
 
-  history = []; suppressHistory = false;
-  const A = JSON.stringify({x:1}), B = JSON.stringify({x:2});
-  history.push(A); history.push(B);
-  ok(history.length===2, "two checkpoints recorded");
-  history.pop(); suppressHistory = true;
-  const restored = JSON.parse(history[history.length-1]);
-  ok(restored.x===1, "undo steps back to the prior checkpoint", restored);
+  // --- allowance edge cases: anything partial or out of range must collapse to null ---
+  ok(normAllowance(null)===null, "no allowance stays null");
+  ok(normAllowance({weekday:2})===null, "weekday without amount is rejected");
+  ok(normAllowance({weekday:2, amount:null})===null, "null amount is rejected");
+  ok(normAllowance({weekday:9, amount:100})===null, "out-of-range weekday is rejected");
+  ok(normAllowance({weekday:-1, amount:100})===null, "negative weekday is rejected");
+  ok(normAllowance({weekday:"3", amount:"2000"}).weekday===3, "numeric strings are coerced");
+  ok(normAllowance({weekday:0, amount:0})===null, "zero amount is rejected");
+  S.allowance = null;
+  ok(daysUntilAllowance()===7, "no schedule falls back to a 7-day week");
+  ok(isAllowanceDay()===false, "no schedule never fires allowance day");
+  ok(weeklyOutlook(3).every(w=>Number.isFinite(w.bal) && w.income===0),
+     "weekly outlook stays finite with no allowance", weeklyOutlook(3));
+  S.allowance = {weekday:todayDow, amount:2000, lastAdded:""};
+  ok(weeklyOutlook(3).every(w=>Number.isFinite(w.bal)), "weekly outlook stays finite with a schedule");
+  S.allowance = null;
+
+  // --- the reported bug: edit a subwallet, it must keep its parent link and stay visible ---
+  const before = acc("i");
+  ok(before.parent==="m" && before.loanId==="income", "Myself starts parented to main as the pool");
+  before.name = "Myself"; before.bal = r2("1234.5"); // what the edit handler writes
+  ok(acc("i").parent==="m", "editing balance/name preserves the parent link");
+  ok(acc("i").loanId==="income", "editing preserves the allowance-pool flag");
+  ok(kidsOf("m").some(k=>k.id==="i"), "edited subwallet is still rendered under its parent");
+  ok(incomeAcc().id==="i", "allowance pool still resolves after an edit");
+
+  // --- creating a new subwallet under a parent ---
+  const nAcc = S.accounts.length;
+  S.accounts.push({id:"new1", parent:"m", name:"New section", kind:"gotyme", bal:0, loanId:""});
+  ok(S.accounts.length===nAcc+1 && kidsOf("m").some(k=>k.id==="new1"), "new subwallet attaches to its parent");
+  ok(parents().every(p=>p.id!=="new1"), "a subwallet is not also treated as a top-level wallet");
+
+  // --- migrate must not silently drop or orphan accounts ---
+  const orphaned = migrate({accounts:[
+    {id:"p",parent:null,name:"P",kind:"gotyme",bal:1},
+    {id:"c",parent:"GONE",name:"C",kind:"gotyme",bal:2}], loans:[], log:[]});
+  ok(orphaned.accounts.length===2, "migration keeps an account whose parent vanished");
+  ok(orphaned.accounts.find(a=>a.id==="c").parent===null, "orphan is promoted to top level so it stays visible");
+  ok(migrate({}).accounts.length===0, "migrating an empty object does not throw");
+  ok(migrate({accounts:"nope",loans:null,log:5}).accounts.length===0, "migration repairs wrong-typed fields");
+  ok(migrate({accounts:[{id:"z",bal:"12.5"}],loans:[],log:[]}).accounts[0].bal===12.5, "string balances are coerced to numbers");
+
+  // --- undo restores exact parent/child relations, no orphans or duplicate ids ---
+  undoStack = []; suppressHistory = false;
+  const snapA = {v:DATA_V, log:[], allowance:null, loans:[], accounts:[
+    {id:"m",parent:null,name:"Main",kind:"gotyme",bal:0,loanId:""},
+    {id:"i",parent:"m",name:"Myself",kind:"gotyme",bal:2000,loanId:"income"}]};
+  undoStack.push(JSON.stringify(snapA));
+  const snapB = JSON.parse(JSON.stringify(snapA));
+  snapB.accounts.push({id:"k2",parent:"m",name:"Added",kind:"gotyme",bal:5,loanId:""});
+  undoStack.push(JSON.stringify(snapB));
+  ok(undoStack.length===2, "two checkpoints recorded");
+  undoStack.pop();
+  const restored = migrate(JSON.parse(undoStack[undoStack.length-1]));
+  ok(restored.accounts.length===2, "undo removes the added subwallet", restored.accounts.length);
+  ok(restored.accounts.find(a=>a.id==="i").parent==="m", "undo restores the parent link exactly");
+  ok(new Set(restored.accounts.map(a=>a.id)).size===restored.accounts.length, "undo leaves no duplicate ids");
+  // snapshots are serialized, so mutating restored state cannot write back into the stack
+  restored.accounts[0].bal = 999;
+  ok(JSON.parse(undoStack[0]).accounts[0].bal===0, "checkpoints are deep copies, not shared references");
 
   ok(r2(0.1+0.2)===0.3, "rounding");
-  S = save0; history = [];
+  S = save0; undoStack = []; suppressHistory = false;
 }
 if(location.search.includes("test")) demo();
 
