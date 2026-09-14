@@ -304,9 +304,46 @@ dialog h3{margin-bottom:20px}
 .day.blank{visibility:hidden}
 .tlfoot{padding:13px 16px; font-size:13.5px; color:var(--dim); display:flex; gap:10px; flex-wrap:wrap}
 
-/* ---------- credit cards ---------- */
+/* ---------- credit cards ----------
+   The card is drawn as an actual card: real ID-1 proportions, the issuer's colour, and a
+   single light source. A list of rectangles is what made this section forgettable. */
 .cardface{padding:20px; border-bottom:1px solid var(--line-soft)}
+.creditcard{position:relative; overflow:hidden; border-radius:16px; padding:18px;
+  aspect-ratio:1.586; max-width:390px; color:#fff; display:flex; flex-direction:column;
+  background:linear-gradient(140deg, var(--b), color-mix(in srgb, var(--b) 55%, #08080c));
+  box-shadow:0 12px 30px -14px color-mix(in srgb, var(--b) 75%, transparent),
+             0 2px 6px rgba(0,0,0,.18)}
+.creditcard::after{content:""; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(130% 95% at 82% 4%, rgba(255,255,255,.3), transparent 58%)}
+.creditcard > *{position:relative; z-index:1}
+.cchead{display:flex; align-items:center; gap:10px; min-height:30px}
+.cchead .mark{height:26px; max-width:104px; object-fit:contain; border-radius:5px; display:block}
+.cchead .mark.txt{font-size:15px; font-weight:600; letter-spacing:-.01em; opacity:.95}
+.ccname{margin-left:auto; font-size:13px; opacity:.82; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.ccchip{width:40px; height:29px; border-radius:6px; margin:16px 0 auto;
+  background:linear-gradient(145deg,#f6e6b4,#c8a84e); opacity:.92;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.14)}
+.ccchip::after{content:""; display:block; width:100%; height:100%; border-radius:6px;
+  background:repeating-linear-gradient(90deg, transparent 0 11px, rgba(0,0,0,.16) 11px 12px)}
+.ccfoot{display:flex; align-items:flex-end; gap:14px}
+.cclabel{font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; opacity:.68}
+.ccbig{font-size:24px; font-weight:600; letter-spacing:-.02em; line-height:1.15; margin-top:2px}
+.ccright{margin-left:auto; text-align:right}
+.ccdue{font-size:17px; font-weight:600; margin-top:2px}
+.cctrack{position:absolute; left:0; right:0; bottom:0; height:4px; background:rgba(255,255,255,.2)}
+.cctrack i{display:block; height:100%; background:rgba(255,255,255,.85)}
+.cardmeta{margin-top:16px}
 .cardface .avail{font-size:32px; font-weight:600; letter-spacing:-.03em; margin:6px 0 2px; line-height:1.1}
+
+/* brand picker inside the edit dialogs */
+.brandpick{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.brandpick input[type=color]{width:46px; height:40px; min-height:40px; padding:3px; flex:none; cursor:pointer}
+.logoprev{width:44px; height:44px; flex:none; border-radius:11px; border:1px solid var(--line);
+  background:var(--sunk); display:flex; align-items:center; justify-content:center;
+  color:var(--dim); overflow:hidden}
+.logoprev img{width:100%; height:100%; object-fit:contain}
+.logobtn{margin:0; display:inline-flex; width:auto; cursor:pointer}
+.ico img.mark{width:100%; height:100%; object-fit:contain; border-radius:inherit}
 .limitbar{height:8px; background:var(--sunk); border-radius:var(--pill); overflow:hidden; margin:15px 0 8px; display:flex}
 .limitbar i{display:block; height:100%; transition:width .7s var(--ease)}
 .limitbar .used{background:var(--accent)}
@@ -519,6 +556,47 @@ const outstanding = L => r2(unpaid(L).reduce((s,i)=>s+i.amount,0));
 const available = L => r2(L.limit - outstanding(L));
 
 const COLORS = ["#5b9dff","#3ecf9a","#e0a44f","#ff6b60","#b38cff","#4fd1e0"];
+
+// A starting colour per provider so a new card is not born grey. These are eyeballed
+// approximations, not official brand values — every one is editable per card and per
+// wallet, and anything not listed falls back to a stable colour derived from the name.
+const BRAND_HINT = {
+  atome:"#f0355f", gotyme:"#f5b301", gcash:"#1f7aec", maya:"#18e08b",
+  billease:"#f2761b", seabank:"#f5502d", unionbank:"#ef7622", bpi:"#b3131f", landbank:"#0f7a3d",
+};
+function brandOf(x){
+  if(x?.brand) return x.brand;
+  const key = String(x?.provider || x?.name || "").toLowerCase().replace(/[^a-z]/g,"");
+  for(const k in BRAND_HINT) if(key.includes(k)) return BRAND_HINT[k];
+  let h = 0; for(const ch of key) h = (h*31 + ch.charCodeAt(0)) % 360;
+  return `hsl(${h} 58% 45%)`;
+}
+// Logos ride along inside the synced JSON, so they are downscaled hard before storage.
+function shrinkImage(file, max){
+  return new Promise((res,rej)=>{
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      URL.revokeObjectURL(url);
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width*k)); c.height = Math.max(1, Math.round(img.height*k));
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      res(c.toDataURL("image/webp", .82));
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); rej(new Error("could not read that image")); };
+    img.src = url;
+  });
+}
+// 1st, 2nd, 3rd, 4th … 11th/12th/13th are the exceptions.
+function ord(n){
+  const v = Math.abs(Number(n) || 0);
+  const suffix = (v % 100 >= 11 && v % 100 <= 13) ? "th"
+    : ["th","st","nd","rd"][v % 10] || "th";
+  return v + suffix;
+}
+const brandMark = (x, fallback) => x?.logo
+  ? `<img class="mark" src="${esc(x.logo)}" alt="">`
+  : `<span class="mark txt">${esc(fallback)}</span>`;
 const colorOf = L => COLORS[Math.max(0,S.loans.findIndex(x=>x.id===L.id)) % COLORS.length];
 
 // ---------- data ----------
@@ -568,6 +646,8 @@ function migrate(s){
   s.accounts = s.accounts.filter(a=>a && typeof a==="object" && a.id).map(a=>({
     ...a, name:String(a.name ?? "Untitled"), bal:r2(a.bal),
     parent:a.parent || null, loanId:a.loanId ?? "", kind:a.kind || "gotyme",
+    brand: typeof a.brand === "string" ? a.brand : "",
+    logo: typeof a.logo === "string" ? a.logo : "",
   }));
   // An orphan (parent id pointing at a deleted account) would vanish from the UI entirely,
   // since it is neither a parent nor anyone's child. Promote it to top level instead.
@@ -575,6 +655,8 @@ function migrate(s){
   for(const a of s.accounts) if(a.parent && !ids.has(a.parent)) a.parent = null;
   s.loans = s.loans.filter(L => L && typeof L === "object" && L.id);
   for(const L of s.loans){
+    if(typeof L.brand !== "string") L.brand = "";
+    if(typeof L.logo !== "string") L.logo = "";
     if(isCard(L)){
       if(!Array.isArray(L.purchases)) L.purchases = [];
       // Amounts come back from JSON as whatever was in the file; an un-coerced string or
@@ -934,7 +1016,8 @@ function renderAccounts(){
   $("#accounts").innerHTML = parents().map(p=>{
     const kids = kidsOf(p.id);
     const head = `<div class="row head-row">
-        <span class="ico">${KIND_ICON[p.kind] || KIND_ICON.gotyme}</span>
+        <span class="ico" style="${p.brand||p.logo?`background:color-mix(in srgb,${brandOf(p)} 18%,transparent);color:${brandOf(p)}`:""}">${
+          p.logo ? brandMark(p,"") : (KIND_ICON[p.kind] || KIND_ICON.gotyme)}</span>
         <div class="grow"><div class="name">${esc(p.name)}${p.id===m?.id?` <span class="pill">main</span>`:""}</div>
           <div class="sub">${kids.length? `wallet ${money(p.bal)} · group ${money(groupTotal(p))}`
                                         : ({cash:"Physical cash",gcash:"E-wallet",gotyme:"Bank"})[p.kind]}</div></div>
@@ -947,13 +1030,17 @@ function renderAccounts(){
       </div>`;
     return head + kids.map((k,i)=>{
       const L = loan(k.loanId);
+      // A section's own brand colour wins; otherwise it borrows the colour of the loan it
+      // funds, so the section and its payments read as the same thing across the app.
+      const tint = k.brand || (L ? colorOf(L) : "var(--accent)");
       const note = k.loanId==="income" ? `<span class="pill">allowance pool</span>` : covText(k);
       return `<div class="row kid">
         <div class="mvs">
           <button class="iconbtn" data-mv="${k.id}:-1" aria-label="Move up" ${i===0?"disabled":""}>▲</button>
           <button class="iconbtn" data-mv="${k.id}:1" aria-label="Move down" ${i===kids.length-1?"disabled":""}>▼</button>
         </div>
-        <span class="ico" style="${L?`background:color-mix(in srgb,${colorOf(L)} 20%,transparent);color:${colorOf(L)}`:""}">${esc(k.name.trim()[0] || "?").toUpperCase()}</span>
+        <span class="ico" style="background:color-mix(in srgb,${tint} 20%,transparent);color:${tint}">${
+          k.logo ? brandMark(k,"") : esc(k.name.trim()[0] || "?").toUpperCase()}</span>
         <div class="grow"><div class="name">${esc(k.name)}</div><div class="sub">${note}</div>${covBar(k)}</div>
         <div class="amt num">${money(k.bal)}</div>
         <div class="rowacts">
@@ -1001,21 +1088,32 @@ function renderCards(){
 
     return `<div class="card" style="margin-bottom:14px">
       <div class="cardface">
-        <div class="cychead"><span class="grow eyebrow">${esc(L.provider)} · available credit</span>
-          <button class="btn mini" data-link="${L.id}">${env?`⇄ ${esc(env.name)}`:"Link a wallet"}</button>
-          <button class="iconbtn" data-edit-card="${L.id}" aria-label="Edit card">Edit</button></div>
-        <div class="avail num ${avail<0?"bad":""}">${money(avail)}</div>
-        <div class="sub">Billed on the ${L.sDay}th, due on the ${L.dDay}th${env?` · funded by ${esc(env.name)}`:""}</div>
-        <div class="limitbar">
-          <i class="used" style="width:${pct(billed)}%"></i>
-          <i class="open" style="width:${Math.min(pct(openAmt), 100-pct(billed))}%"></i></div>
-        <div class="cychead sub"><span class="grow num">${money(out)} used</span>
-          <span class="num">${money(L.limit)} limit</span></div>
-        ${out? `<div class="sub" style="margin-top:5px">
-          ${billed? `<i class="dot" style="background:var(--accent);display:inline-block;vertical-align:middle;margin-right:4px"></i>${money(billed)} billed &amp; unpaid`:""}
-          ${billed&&openAmt?" · ":""}
-          ${openAmt? `<i class="dot" style="background:var(--warn);display:inline-block;vertical-align:middle;margin-right:4px"></i>${money(openAmt)} not billed yet`:""}
-        </div>`:""}
+        <div class="creditcard" style="--b:${brandOf(L)}">
+          <div class="cchead">${brandMark(L, L.provider)}
+            <span class="ccname">${esc(L.label)}</span></div>
+          <div class="ccchip" aria-hidden="true"></div>
+          <div class="ccfoot">
+            <div><div class="cclabel">Available credit</div>
+              <div class="ccbig num">${money(avail)}</div></div>
+            <div class="ccright"><div class="cclabel">Due</div>
+              <div class="ccdue num">${ord(L.dDay)}</div></div>
+          </div>
+          <div class="cctrack"><i style="width:${pct(out)}%"></i></div>
+        </div>
+        <div class="cardmeta">
+          <div class="cychead sub"><span class="grow num">${money(out)} used of ${money(L.limit)}</span>
+            <button class="btn mini" data-link="${L.id}">${env?`⇄ ${esc(env.name)}`:"Link a wallet"}</button>
+            <button class="iconbtn" data-edit-card="${L.id}" aria-label="Edit card">Edit</button></div>
+          <div class="limitbar">
+            <i class="used" style="width:${pct(billed)}%"></i>
+            <i class="open" style="width:${Math.min(pct(openAmt), 100-pct(billed))}%"></i></div>
+          <div class="sub">Billed on the ${L.sDay}th, due on the ${L.dDay}th${env?` · funded by ${esc(env.name)}`:""}</div>
+          ${out? `<div class="sub" style="margin-top:5px">
+            ${billed? `<i class="dot" style="background:var(--accent);display:inline-block;vertical-align:middle;margin-right:4px"></i>${money(billed)} billed &amp; unpaid`:""}
+            ${billed&&openAmt?" · ":""}
+            ${openAmt? `<i class="dot" style="background:var(--warn);display:inline-block;vertical-align:middle;margin-right:4px"></i>${money(openAmt)} not billed yet`:""}
+          </div>`:""}
+        </div>
       </div>
       ${stmts.map(i=>cyc(i,false)).join("")}
       ${open ? cyc(open,true) : `<div class="empty">Nothing charged this cycle. Next statement ${niceY(cycleFor(today(),L.sDay,L.dDay).stmt)}.</div>`}
@@ -1344,6 +1442,16 @@ function ask(title, fields, onOk){
   f.innerHTML = `<h3>${esc(title)}</h3>` + (fields.hint?`<p class="hint">${fields.hint}</p>`:"") + fields.map(x=>{
     if(x.type==="select") return `<label><span class="eyebrow">${x.label}</span><select name="${x.name}">${
       x.options.map(o=>`<option value="${esc(o.v)}"${String(o.v)===String(x.value)?" selected":""}>${esc(o.t)}</option>`).join("")}</select></label>`;
+    // Native colour well and file picker — no dependency, and the OS picker is better
+    // than anything worth hand-rolling here.
+    if(x.type==="brand") return `<label><span class="eyebrow">${x.label}</span>
+      <span class="brandpick">
+        <span class="logoprev" id="lp_${x.name}">${x.value?.logo?`<img src="${esc(x.value.logo)}" alt="">`:"&mdash;"}</span>
+        <input type="color" name="${x.name}_brand" value="${esc(x.value?.brand || x.value?.fallback || "#0066cc")}" aria-label="Colour">
+        <input type="hidden" name="${x.name}_logo" value="${esc(x.value?.logo || "")}">
+        <label class="btn mini logobtn">Logo&hellip;<input type="file" accept="image/*" data-logo-for="${x.name}" hidden></label>
+        <button type="button" class="btn mini ghost" data-logo-clear="${x.name}">Clear</button>
+      </span></label>`;
     return `<label><span class="eyebrow">${x.label}</span><input name="${x.name}" type="${x.type||"text"}"
       ${x.type==="number"?'step="0.01" inputmode="decimal"':""} value="${esc(x.value??"")}" ${x.required?"required":""}></label>`;
   }).join("") + `<div class="dact">
@@ -1354,6 +1462,24 @@ function ask(title, fields, onOk){
   // (Enter, or an on-screen keyboard's Go key) does the expected thing and still runs
   // required-field validation.
   f.querySelector("#dlgCancel").onclick = () => $("#dlg").close("cancel");
+  f.querySelectorAll("[data-logo-for]").forEach(inp=>{
+    inp.onchange = async e => {
+      const file = e.target.files[0]; if(!file) return;
+      try{
+        const uri = await shrinkImage(file, 96);
+        f.querySelector(`input[name="${inp.dataset.logoFor}_logo"]`).value = uri;
+        f.querySelector(`#lp_${inp.dataset.logoFor}`).innerHTML = `<img src="${esc(uri)}" alt="">`;
+      } catch(err){ alert(err.message); }
+      e.target.value = "";
+    };
+  });
+  f.querySelectorAll("[data-logo-clear]").forEach(b=>{
+    b.onclick = () => {
+      const n = b.dataset.logoClear;
+      f.querySelector(`input[name="${n}_logo"]`).value = "";
+      f.querySelector(`#lp_${n}`).innerHTML = "&mdash;";
+    };
+  });
   const del = f.querySelector("#dlgDel");
   if(del) del.onclick = () => {
     if(!confirm(typeof fields.del === "string" ? fields.del : "Delete this? It cannot be undone.")) return;
@@ -1481,7 +1607,9 @@ document.body.addEventListener("click", e=>{
     const f = [{name:"label",label:"Name",value:L.label},
       {name:"limit",label:"Credit limit",type:"number",value:L.limit},
       {name:"sDay",label:"Billed on day",type:"number",value:L.sDay},
-      {name:"dDay",label:"Due on day",type:"number",value:L.dDay}];
+      {name:"dDay",label:"Due on day",type:"number",value:L.dDay},
+      {name:"bd",label:"Card colour and logo",type:"brand",
+       value:{brand:L.brand, logo:L.logo, fallback:brandOf(L)}}];
     f.del = `Delete ${L.label} and every purchase on it?`;
     ask("Edit "+L.label, f, (v,d)=>{
       if(v==="del"){
@@ -1489,7 +1617,9 @@ document.body.addEventListener("click", e=>{
         S.accounts.forEach(a=>{ if(a.loanId===L.id) a.loanId=""; });
         return render(); }
       if(v!=="ok") return;
-      L.label=d.label; L.limit=r2(d.limit); L.sDay=+d.sDay; L.dDay=+d.dDay; rebuildCard(L); render(); });
+      L.label=d.label; L.limit=r2(d.limit); L.sDay=+d.sDay; L.dDay=+d.dDay;
+      L.brand=d.bd_brand||""; L.logo=d.bd_logo||"";
+      rebuildCard(L); render(); });
   }
 
   if(t.dataset.editPur){
@@ -1538,7 +1668,9 @@ document.body.addEventListener("click", e=>{
   if(t.dataset.editAcc){
     const a = acc(t.dataset.editAcc), kids = kidsOf(a.id), isAllowanceAcc = a.loanId==="income";
     const f = [{name:"name",label:"Name",value:a.name},
-               {name:"bal",label:"Balance (set to what the app shows)",type:"number",value:a.bal}];
+               {name:"bal",label:"Balance (set to what the app shows)",type:"number",value:a.bal},
+               {name:"bd",label:"Colour and logo",type:"brand",
+                value:{brand:a.brand, logo:a.logo, fallback:brandOf(a)}}];
     if(a.parent) f.splice(1,0,{name:"loanId",label:"What it is for",type:"select",options:loanOptions(),value:a.loanId});
     if(isAllowanceAcc) f.push(
       {name:"aday",label:"Allowance day",type:"select",value:S.allowance?.weekday ?? "",
@@ -1555,6 +1687,7 @@ document.body.addEventListener("click", e=>{
       if(v!=="ok") return;
       if(r2(d.bal)!==a.bal) logIt(`${a.name}: ${money(a.bal)} → ${money(r2(d.bal))}`);
       a.name=d.name; a.bal=r2(d.bal); if("loanId" in d) a.loanId=d.loanId;
+      a.brand=d.bd_brand||""; a.logo=d.bd_logo||"";
       if(isAllowanceAcc){
         // A brand-new schedule set mid-week must not immediately offer the occurrence that
         // already passed — that money is either already in the balance or was never coming.

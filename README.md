@@ -6,12 +6,16 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
 
 ## What it does
 
+- **Brand colour and logo.** Every wallet and card takes a colour and an optional image, set
+  from its edit dialog. Logos are downscaled to 96px before they are stored, so they sync with
+  everything else. Unset providers get a suggested colour, or a stable one derived from the name.
 - **Wallets with sections.** A main bank wallet holds named sub-sections ("envelopes") whose money
   the main wallet cannot spend until you move it. Reorderable. One section is marked the allowance
   pool — the place your income lands and every top-up is drawn from.
 - **Instalment loans.** Weekly, fortnightly or monthly schedules. Link a loan to a section and the
   section reports how far it stretches: `Covers 12/14 · ₱67.55 more covers all 14`.
-- **Credit cards.** Log purchases against a limit. Statements are derived from the purchases and a
+- **Credit cards.** Drawn as an actual card in the issuer's colour, with your own logo if you
+  add one. Log purchases against a limit. Statements are derived from the purchases and a
   statement/due day pair, so a purchase made after the cut-off correctly rolls to the next cycle.
   Partial payments carry the remainder forward.
 - **Fund the envelopes.** Given a window, it computes the per-envelope top-up needed, ordered by
