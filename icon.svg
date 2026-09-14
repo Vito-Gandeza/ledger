@@ -1,5 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="114" fill="#0b0b0c"/>
-  <text x="256" y="352" font-size="272" font-family="Georgia, 'Times New Roman', serif"
-        fill="#eceae6" text-anchor="middle">&#8369;</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ledger">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7d94ff"/>
+      <stop offset="1" stop-color="#3b5bdb"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".26"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="114" fill="url(#g)"/>
+  <rect width="512" height="512" rx="114" fill="url(#sheen)"/>
+  <!-- Rising columns: the projection chart, which is what the app is actually for. -->
+  <g fill="#ffffff">
+    <rect x="286" y="300" width="42" height="84" rx="12" opacity=".55"/>
+    <rect x="348" y="252" width="42" height="132" rx="12" opacity=".78"/>
+    <rect x="410" y="196" width="42" height="188" rx="12"/>
+  </g>
+  <text x="112" y="356" font-size="248" font-weight="600" text-anchor="middle" fill="#ffffff"
+        font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif">&#8369;</text>
 </svg>

@@ -20,6 +20,11 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
   Partial payments carry the remainder forward.
 - **Fund the envelopes.** Given a window, it computes the per-envelope top-up needed, ordered by
   which loan bites first, and applies the transfers in one click.
+- **Wishlist.** Things you are saving for, each with a progress ring and a date you can
+  afford it by. The rate comes from your allowance minus what the schedule already claims,
+  averaged over the projection and excluding the overdue backlog, which is a one-off debt
+  rather than a weekly cost. Link a wish to a section and progress follows that balance, so
+  putting money aside is a real transfer instead of a number you maintain by hand.
 - **Payment timeline.** A month calendar with per-loan colour dots and per-day totals. Tap a day
   for its breakdown.
 - **Projection chart.** Eight weeks of closing balance as a column chart above the weekly rows.
