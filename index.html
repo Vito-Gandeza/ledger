@@ -626,11 +626,18 @@ function cycleFor(date, sDay, dDay){
 }
 // A card's statements are derived from its purchases, so they can never drift apart.
 function rebuildCard(L){
-  const wasPaid = Object.fromEntries((L.items||[]).map(i=>[i.due, i.paid]));
+  // Carry the whole previous row forward, not just its paid flag — it also holds where the
+  // payment came from, which is what lets "mark unpaid" put the money back.
+  const prev = Object.fromEntries((L.items||[]).map(i=>[i.due, i]));
   const by = new Map();
   for(const p of L.purchases){
     const c = cycleFor(p.date, L.sDay, L.dDay);
-    if(!by.has(c.due)) by.set(c.due, {due:c.due, stmt:c.stmt, amount:0, paid:!!wasPaid[c.due]});
+    if(!by.has(c.due)){
+      const was = prev[c.due];
+      by.set(c.due, {due:c.due, stmt:c.stmt, amount:0, paid:!!was?.paid,
+        ...(was?.paidFrom ? {paidFrom:was.paidFrom, paidAmt:r2(was.paidAmt)} : {}),
+        ...(was?.carryId  ? {carryId:was.carryId} : {})});
+    }
     by.get(c.due).amount = r2(by.get(c.due).amount + p.amount);
   }
   L.items = [...by.values()].filter(i=>i.amount!==0).sort((a,b)=> a.due<b.due?-1:1);
@@ -1553,8 +1560,8 @@ function cardOffsets(){
   const out = new Map();
   if(!assumePaid()) return out;
   for(const o of receivables()){
+    if(!isPassThrough(o)) continue;
     const link = purchaseOf(o);
-    if(!link) continue;
     const due = cycleFor(link.pu.date, link.L.sDay, link.L.dDay).due;
     const key = `${link.L.id}|${due}`;
     out.set(key, r2((out.get(key) || 0) + owedAmount(o)));
@@ -1565,7 +1572,18 @@ const owedToMeRaw = () => r2(receivables().reduce((s,o) => s + owedAmount(o), 0)
 const owedToMe = owedToMeRaw;
 // The part you fronted on a card: it sits in `owed` as a liability AND is coming back to
 // you, which is what makes the headline number read worse than reality.
-const owedOnCard = () => r2(receivables().filter(o => purchaseOf(o)).reduce((s,o) => s + owedAmount(o), 0));
+// Fronted spending is only a pass-through while the statement it bills to is still unpaid.
+// Once you have settled that statement out of your own pocket, their repayment stops being
+// earmarked and becomes plain cash coming back to you — before this, it was written off
+// from every projection permanently.
+function isPassThrough(o){
+  const link = purchaseOf(o);
+  if(!link) return false;
+  const due = cycleFor(link.pu.date, link.L.sDay, link.L.dDay).due;
+  const it = (link.L.items || []).find(i => i.due === due);
+  return !!it && !it.paid;
+}
+const owedOnCard = () => r2(receivables().filter(isPassThrough).reduce((s,o) => s + owedAmount(o), 0));
 // Debts grouped under the person who owes them, biggest debtor first.
 function owedByPerson(){
   const groups = new Map();
@@ -2007,6 +2025,18 @@ $("#addPurchase").onclick = ()=>{
       render(); });
 };
 
+// Returns a recorded payment to the wallet it came from. Silent when the wallet has since
+// been deleted or the row predates payment tracking — there is nowhere to put it back.
+function refund(it, what){
+  const src = it.paidFrom && acc(it.paidFrom);
+  const amt = r2(it.paidAmt);
+  if(src && amt > 0){
+    src.bal = r2(src.bal + amt);
+    logIt(`Returned ${money(amt)} to ${src.name} — ${what} marked unpaid`);
+  }
+  delete it.paidFrom; delete it.paidAmt;
+}
+
 function reorder(id, dir){
   const a = acc(id), sibs = kidsOf(a.parent);
   const at = sibs.indexOf(a), to = at + dir;
@@ -2111,6 +2141,7 @@ document.body.addEventListener("click", e=>{
       if(v==="del"){
         S.loans = S.loans.filter(x=>x.id!==L.id);
         S.accounts.forEach(a=>{ if(a.loanId===L.id) a.loanId=""; });
+        for(const o of S.owed) if(o.loanId===L.id){ o.loanId=""; o.purchaseId=""; }
         return render(); }
       if(v!=="ok") return;
       L.label=d.label; L.limit=r2(d.limit); L.sDay=+d.sDay; L.dDay=+d.dDay;
@@ -2124,7 +2155,11 @@ document.body.addEventListener("click", e=>{
                {name:"date",label:"Date",type:"date",value:p.date}];
     f.del = `Delete the purchase "${p.label}" for ${money(p.amount)}?`;
     ask("Edit purchase", f, (v,d)=>{
-      if(v==="del"){ L.purchases = L.purchases.filter(x=>x.id!==pid); rebuildCard(L); return render(); }
+      if(v==="del"){
+        L.purchases = L.purchases.filter(x=>x.id!==pid);
+        for(const o of S.owed) if(o.loanId===L.id && o.purchaseId===pid){ o.loanId=""; o.purchaseId=""; }
+        rebuildCard(L); return render();
+      }
       if(v!=="ok") return;
       p.label=d.label; p.amount=r2(d.amount); p.date=d.date; rebuildCard(L); render(); });
   }
@@ -2137,8 +2172,11 @@ document.body.addEventListener("click", e=>{
     ask(`Pay ${L.label} · ${niceY(it.due)}`, f, (v,dd)=>{ if(v!=="ok") return;
       const a = acc(dd.src), amt = r2(dd.amount), rest = r2(it.amount - amt);
       a.bal = r2(a.bal - amt); it.paid = true;
+      it.paidFrom = a.id; it.paidAmt = amt;
       if(rest > 0){
-        L.purchases.push({id:uid(), date:addDays(it.due,1), label:`Carried from ${nice(it.due)}`, amount:rest});
+        const carryId = uid();
+        L.purchases.push({id:carryId, date:addDays(it.due,1), label:`Carried from ${nice(it.due)}`, amount:rest});
+        it.carryId = carryId;   // removed again if this payment is undone
         logIt(`${L.label}: ${money(rest)} carried to the next cycle`);
       }
       logIt(`Paid ${L.label} ${money(amt)} from ${a.name}`);
@@ -2146,7 +2184,12 @@ document.body.addEventListener("click", e=>{
   }
   if(t.dataset.unpayCard){
     const [L,due] = pickCard("unpayCard"), it = L.items.find(i=>i.due===due);
-    if(it){ it.paid = false; render(); }
+    if(!it) return;
+    refund(it, `${L.label} ${niceY(it.due)}`);
+    // A partial payment pushed the remainder forward as a purchase; undoing the payment
+    // has to take that back out, or the balance is counted twice.
+    if(it.carryId){ L.purchases = L.purchases.filter(x=>x.id!==it.carryId); delete it.carryId; }
+    it.paid = false; rebuildCard(L); render();
   }
 
   if(t.dataset.fund){
@@ -2229,11 +2272,18 @@ document.body.addEventListener("click", e=>{
           logIt(`Part-paid ${L.label} ${money(amt)} from ${a.name} · ${money(it.amount)} still due ${nice(it.due)}`);
         } else {
           it.paid = true; it.amount = amt;
+          it.paidFrom = a.id; it.paidAmt = amt;   // so marking it unpaid can undo the money too
           logIt(`Paid ${L.label} ${money(amt)} from ${a.name}`);
         }
         render(); });
   }
-  if(t.dataset.unpay){ const [L,i]=pick("unpay"); L.items[i].paid=false; render(); }
+  // Marking something unpaid used to restore the debt without returning the money, so the
+  // difference simply disappeared from the net position.
+  if(t.dataset.unpay){
+    const [L,i] = pick("unpay"), it = L.items[i];
+    refund(it, `${L.label} ${niceY(it.due)}`);
+    it.paid = false; render();
+  }
   if(t.dataset.editInst){
     const [L,i] = pick("editInst"), it = L.items[i];
     const f = [{name:"due",label:"Due date",type:"date",value:it.due},{name:"amount",label:"Amount",type:"number",value:it.amount}];
@@ -2594,6 +2644,49 @@ function demo(){
   S.assumePaid = false;
   ok(walletTotal()===5000 && cardOffsets().size===0, "with the mode off nothing is netted out");
   ok(weeklyOutlook(WK_WEEKS).some(r=>r.bal<5000), "...and the statement shows as a real cost again");
+
+  // --- marking a payment unpaid must return the money, not just the debt ---
+  S = {v:DATA_V, log:[], wish:[], owed:[], people:[], allowance:null, assumePaid:false,
+       accounts:[{id:"m",parent:null,name:"Main",kind:"gotyme",bal:1000,loanId:""}],
+       loans:[{id:"L",provider:"p",label:"L",ref:"",freq:"week",items:gen(today(),2,"week",100)}]};
+  const netOf = () => r2(S.accounts.reduce((x,a)=>x+a.bal,0) - S.loans.reduce((x,L)=>x+unpaid(L).reduce((t,i)=>t+i.amount,0),0));
+  const net0 = netOf(), it0 = S.loans[0].items[0];
+  S.accounts[0].bal = r2(S.accounts[0].bal - 100);          // what Pay does
+  it0.paid = true; it0.paidFrom = "m"; it0.paidAmt = 100;
+  ok(netOf()===net0, "paying moves money without changing the net position", netOf());
+  refund(it0, "test"); it0.paid = false;                     // what "mark unpaid" does
+  ok(S.accounts[0].bal===1000, "the money goes back to the wallet it came from", S.accounts[0].bal);
+  ok(netOf()===net0, "and the net position is exactly where it started", netOf());
+  ok(it0.paidFrom===undefined && it0.paidAmt===undefined, "the payment record is cleared");
+  refund(it0, "test");
+  ok(S.accounts[0].bal===1000, "refunding twice cannot pay you twice", S.accounts[0].bal);
+  const orphanIt = {due:today(), amount:50, paid:true, paidFrom:"GONE", paidAmt:50};
+  refund(orphanIt, "test");
+  ok(S.accounts[0].bal===1000, "a refund to a deleted wallet is dropped, not thrown");
+
+  // a card rebuild must not lose the payment record, or the refund silently stops working
+  const cardL = rebuildCard({id:"C",provider:"C",label:"C",ref:"",freq:"card",limit:5000,sDay:9,dDay:19,
+    items:[],purchases:[{id:"P",date:today(),label:"x",amount:300}]});
+  cardL.items[0].paid = true; cardL.items[0].paidFrom = "m"; cardL.items[0].paidAmt = 300;
+  cardL.purchases.push({id:"P2",date:today(),label:"y",amount:20});
+  rebuildCard(cardL);
+  ok(cardL.items[0].paidFrom==="m" && cardL.items[0].paidAmt===300,
+     "rebuilding a card keeps where its statement was paid from", cardL.items[0]);
+
+  // --- a fronted purchase stops being a pass-through once you have paid the statement ---
+  S = {v:DATA_V, log:[], wish:[], allowance:null, assumePaid:true, people:[{id:"s",name:"Sam",brand:""}],
+       accounts:[{id:"m",parent:null,name:"Main",kind:"gotyme",bal:5000,loanId:""}],
+       loans:[rebuildCard({id:"C",provider:"Card",label:"Card",ref:"",freq:"card",limit:9000,sDay:9,dDay:19,
+              items:[],purchases:[{id:"P",date:addDays(today(),-40),label:"Thing",amount:600}]})],
+       owed:[{id:"o",personId:"s",amount:600,note:"",loanId:"C",purchaseId:"P",settled:false}]};
+  ok(isPassThrough(S.owed[0])===true, "while the statement is unpaid it is earmarked for the card");
+  ok(cashOwed()===0 && cardOwed()===600 && walletTotal()===5000, "so none of it is spendable yet");
+  S.loans[0].items.forEach(i=>i.paid = true);          // you paid that statement yourself
+  ok(isPassThrough(S.owed[0])===false, "once you have paid it, their repayment is yours");
+  ok(cashOwed()===600 && cardOwed()===0, "it moves from earmarked to spendable", [cashOwed(), cardOwed()]);
+  ok(walletTotal()===5600, "and it finally reaches the pot instead of vanishing", walletTotal());
+  ok(cardOffsets().size===0, "a paid statement is never offset twice");
+  ok(owedToMe()===600, "what you are owed is unchanged by any of this");
 
   // --- "assume settled" moves every stock of money, and nothing else ---
   S = {v:DATA_V, log:[], allowance:{weekday:new Date().getDay(), amount:1000, lastAdded:today()},
