@@ -204,6 +204,7 @@ button{background:none; border:0; cursor:pointer}
 /* ---------- inputs ---------- */
 input,select{background:var(--card); border:1px solid var(--line); border-radius:var(--r-md);
   padding:12px 14px; width:100%; min-height:44px; transition:border-color .16s, box-shadow .16s}
+input.locked{opacity:.62; cursor:not-allowed}
 input:focus,select:focus{outline:0; border-color:var(--accent-hi);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
 label{display:block; margin-bottom:16px}
@@ -664,8 +665,8 @@ const brandMark = (x, fallback) => x?.logo
 const colorOf = L => COLORS[Math.max(0,S.loans.findIndex(x=>x.id===L.id)) % COLORS.length];
 
 // ---------- data ----------
-const DATA_V = 5;
-const blank = () => ({v:DATA_V, accounts:[], loans:[], log:[], wish:[], owed:[]});
+const DATA_V = 6;
+const blank = () => ({v:DATA_V, accounts:[], loans:[], log:[], wish:[], owed:[], people:[]});
 
 function starter(){
   const main = uid();
@@ -674,12 +675,12 @@ function starter(){
     {id:uid(), parent:main, name:"Myself",       kind:"gotyme", bal:0, loanId:"income"},
     {id:uid(), parent:null, name:"GCash",        kind:"gcash",  bal:0, loanId:""},
     {id:uid(), parent:null, name:"Cash on hand", kind:"cash",   bal:0, loanId:""},
-  ], loans:[], log:[], wish:[], owed:[]};
+  ], loans:[], log:[], wish:[], owed:[], people:[]};
 }
 
 // Fictional numbers, purely so a first-time visitor can see how the pieces fit.
 function demoData(){
-  const main=uid(), a=uid(), b=uid(), card=uid(), pur=uid();
+  const main=uid(), a=uid(), b=uid(), card=uid(), pur=uid(), sam=uid(), alex=uid();
   return {v:DATA_V, accounts:[
     {id:main,  parent:null, name:"Main bank",    kind:"gotyme", bal:250,  loanId:""},
     {id:uid(), parent:main, name:"Myself",       kind:"gotyme", bal:2000, loanId:"income"},
@@ -697,10 +698,10 @@ function demoData(){
      limit:8000, sDay:9, dDay:19, items:[],
      purchases:[{id:pur, date:addDays(today(),-2), label:"Subscription", amount:1410.39}]}),
   ], log:[], allowance:{weekday:new Date().getDay(), amount:2500, lastAdded:today()},
-  owed:[{id:uid(), who:"Sam", amount:705.20, due:addDays(today(),9), note:"Half the subscription",
-         loanId:card, purchaseId:pur, settled:false},
-        {id:uid(), who:"Alex", amount:400, due:addDays(today(),-3), note:"Lunch",
-         loanId:"", purchaseId:"", settled:false}],
+  people:[{id:sam, name:"Sam", brand:"#b38cff"}, {id:alex, name:"Alex", brand:"#4fd1e0"}],
+  owed:[{id:uid(), personId:sam, amount:0, note:"", loanId:card, purchaseId:pur, settled:false},
+        {id:uid(), personId:alex, amount:400, note:"Lunch", loanId:"", purchaseId:"", settled:false},
+        {id:uid(), personId:alex, amount:250, note:"Concert ticket", loanId:"", purchaseId:"", settled:false}],
   wish:[
     {id:uid(), name:"Mechanical keyboard", cost:4800, brand:"#2997ff", logo:""},
     {id:uid(), name:"Weekend trip", cost:12000, brand:"#3ecf9a", logo:""},
@@ -715,16 +716,33 @@ function migrate(s){
   if(!Array.isArray(s.accounts)) s.accounts = [];
   if(!Array.isArray(s.loans))    s.loans = [];
   if(!Array.isArray(s.log))      s.log = [];
-  // Money other people owe YOU. When it is tied to a card purchase it is already counted
-  // as a liability, so it hits the net position twice until they pay it back.
+  // People who owe you money. A debt points at a profile rather than carrying a name, so
+  // renaming someone or giving them a colour happens once instead of per debt.
+  s.people = Array.isArray(s.people) ? s.people.filter(x => x && typeof x === "object" && x.id).map(x => ({
+    ...x, name:String(x.name ?? "Someone"), brand: typeof x.brand === "string" ? x.brand : "",
+  })) : [];
+  // An amount and a description are only stored for debts that are NOT on a card; a linked
+  // one reads both straight off the purchase, so the two can never drift apart.
   s.owed = Array.isArray(s.owed) ? s.owed.filter(o => o && typeof o === "object" && o.id).map(o => ({
-    ...o, who:String(o.who ?? "Someone"), amount:r2(o.amount),
-    due:  typeof o.due  === "string" ? o.due  : "",
+    ...o, amount:r2(o.amount),
     note: typeof o.note === "string" ? o.note : "",
+    personId:   typeof o.personId   === "string" ? o.personId   : "",
     loanId:     typeof o.loanId     === "string" ? o.loanId     : "",
     purchaseId: typeof o.purchaseId === "string" ? o.purchaseId : "",
     settled: !!o.settled,
   })) : [];
+  // Older data stored the name on the debt itself; promote each distinct name to a profile.
+  // This also catches a debt whose profile has since been deleted.
+  const pids = new Set(s.people.map(x => x.id));
+  for(const o of s.owed){
+    if(o.personId && pids.has(o.personId)) continue;
+    const nm = String(o.who || "Someone").trim() || "Someone";
+    let who = s.people.find(x => x.name.toLowerCase() === nm.toLowerCase());
+    if(!who){ who = {id:uid(), name:nm, brand:""}; s.people.push(who); pids.add(who.id); }
+    o.personId = who.id;
+  }
+  for(const o of s.owed){ delete o.who; delete o.due; }
+
   // A wish can either track a real section's balance or hold a number you keep yourself.
   s.wish = Array.isArray(s.wish) ? s.wish.filter(w => w && typeof w === "object" && w.id).map(w => ({
     ...w, name:String(w.name ?? "Untitled"), cost:r2(w.cost), saved:r2(w.saved),
@@ -1468,17 +1486,33 @@ function renderWeekly(){
 }
 
 // ---------- owed to you ----------
-const receivables = () => S.owed.filter(o => !o.settled);
-const owedToMe = () => r2(receivables().reduce((s,o) => s + o.amount, 0));
-// The part you fronted on a card: it is inside `owed` as a liability AND coming back to
-// you, which is the bit that makes the headline number read worse than reality.
-const owedOnCard = () => r2(receivables().filter(o => o.purchaseId).reduce((s,o) => s + o.amount, 0));
+const person = id => S.people.find(p => p.id === id);
 const purchaseOf = o => {
   const L = loan(o.loanId);
   if(!L || !isCard(L)) return null;
   const pu = (L.purchases || []).find(x => x.id === o.purchaseId);
   return pu ? {L, pu} : null;
 };
+// A card-backed debt IS the purchase: its amount and what it was for come from there, so
+// editing the purchase moves the debt with it and neither can go stale.
+const owedAmount = o => { const l = purchaseOf(o); return l ? r2(l.pu.amount) : r2(o.amount); };
+const owedLabel  = o => { const l = purchaseOf(o); return l ? l.pu.label : (o.note || ""); };
+
+const receivables = () => S.owed.filter(o => !o.settled);
+const owedToMe = () => r2(receivables().reduce((s,o) => s + owedAmount(o), 0));
+// The part you fronted on a card: it sits in `owed` as a liability AND is coming back to
+// you, which is what makes the headline number read worse than reality.
+const owedOnCard = () => r2(receivables().filter(o => purchaseOf(o)).reduce((s,o) => s + owedAmount(o), 0));
+// Debts grouped under the person who owes them, biggest debtor first.
+function owedByPerson(){
+  const groups = new Map();
+  for(const o of receivables()){
+    if(!groups.has(o.personId)) groups.set(o.personId, {who:person(o.personId), items:[], total:0});
+    const g = groups.get(o.personId);
+    g.items.push(o); g.total = r2(g.total + owedAmount(o));
+  }
+  return [...groups.values()].filter(g => g.who).sort((a,b) => b.total - a.total);
+}
 
 // ---------- wishlist ----------
 // What is genuinely spare each week: allowance in, scheduled payments out, averaged.
@@ -1508,23 +1542,22 @@ function wishProgress(w, rate, pot){
 
 function renderOwed(){
   const box = $("#owedList"); if(!box) return;
-  const live = receivables();
+  const groups = owedByPerson();
   const total = owedToMe(), onCard = owedOnCard();
   const assets = r2(S.accounts.reduce((s,a)=>s+a.bal,0));
   const owedOut = r2(S.loans.reduce((s,L)=>s+unpaid(L).reduce((t,i)=>t+i.amount,0),0));
   const now = r2(assets - owedOut), after = r2(now + total);
 
   const note = $("#owedNote");
-  if(note) note.textContent = live.length
-    ? `${live.length} ${live.length>1?"people":"person"}` : "";
+  if(note) note.textContent = groups.length ? `${groups.length} ${groups.length>1?"people":"person"}` : "";
 
-  if(!live.length){
+  if(!groups.length){
     box.innerHTML = `<div class="empty">Nobody owes you anything right now. Add a debt here and the difference it makes to your position shows above.</div>`;
     return;
   }
 
-  // The whole point of the section: what the headline number says versus what it will
-  // say once these land. Both bars share a scale so the gap is the message.
+  // The point of the section: what the headline number says versus what it will say once
+  // these land. Both bars share a scale, so the gap between them is the message.
   const span = Math.max(Math.abs(now), Math.abs(after), 1);
   const bar = (v, cls) => `<div class="track"><i class="${cls}" style="width:${(Math.abs(v)/span*100).toFixed(1)}%"></i></div>`;
 
@@ -1533,25 +1566,33 @@ function renderOwed(){
         ${bar(now, now<0?"neg":"pos")}<span class="num ${now<0?"bad":""}">${money(now)}</span></div>
       <div class="owedrow"><span class="lbl">Once they pay</span>
         ${bar(after, after<0?"neg":"pos")}<span class="num ${after<0?"bad":"ok"}">${money(after)}</span></div>
-      <div class="owedsum"><span class="grow">${money(total)} coming back to you</span>
+      <div class="owedsum"><span>${money(total)} coming back to you</span>
         ${onCard>0?`<span class="sub">${money(onCard)} of it already on a card</span>`:""}</div>
     </div>`
-    + live.sort((a,b)=> (a.due||"9999") < (b.due||"9999") ? -1 : 1).map(o=>{
-      const link = purchaseOf(o);
-      const n = o.due ? daysTo(o.due) : null;
-      const when = n === null ? "" : n < 0 ? `<span class="bad">${-n}d late</span>`
-        : n === 0 ? "due today" : `in ${n}d`;
-      return `<div class="row">
-        <span class="ico">${esc(o.who.trim()[0] || "?").toUpperCase()}</span>
-        <div class="grow"><div class="name">${esc(o.who)}</div>
-          <div class="sub">${o.note?esc(o.note)+" · ":""}${when || "no date set"}</div>
-          ${link?`<div class="sub"><span class="pill due">on ${esc(link.L.label)}</span> ${esc(link.pu.label)} · ${money(link.pu.amount)}</div>`:""}</div>
-        <div class="amt num ok">${money(o.amount)}</div>
+    + groups.map(g=>{
+      const tint = g.who.brand || "var(--accent)";
+      return `<div class="row head-row">
+        <span class="ico" style="background:color-mix(in srgb,${tint} 18%,transparent);color:${tint}">${
+          esc(g.who.name.trim()[0] || "?").toUpperCase()}</span>
+        <div class="grow"><div class="name">${esc(g.who.name)}</div>
+          <div class="sub">${g.items.length} ${g.items.length>1?"debts":"debt"}</div></div>
+        <div class="amt num ok">${money(g.total)}</div>
         <div class="rowacts">
-          <button class="btn mini" data-owed-settle="${o.id}">Settled</button>
-          <button class="iconbtn" data-edit-owed="${o.id}" aria-label="Edit">Edit</button>
+          <button class="iconbtn" data-edit-person="${g.who.id}" aria-label="Edit person">Edit</button>
         </div>
-      </div>`;
+      </div>` + g.items.map(o=>{
+        const link = purchaseOf(o);
+        return `<div class="row kid">
+          <div class="grow"><div class="name">${esc(owedLabel(o) || "No description")}</div>
+            ${link?`<div class="sub"><span class="pill due">on ${esc(link.L.label)}</span> ${nice(link.pu.date)}</div>`
+                  :`<div class="sub">not on a card</div>`}</div>
+          <div class="amt num">${money(owedAmount(o))}</div>
+          <div class="rowacts">
+            <button class="btn mini" data-owed-settle="${o.id}">Settled</button>
+            <button class="iconbtn" data-edit-owed="${o.id}" aria-label="Edit">Edit</button>
+          </div>
+        </div>`;
+      }).join("");
     }).join("");
 }
 
@@ -1771,23 +1812,63 @@ const purchaseOptions = () => [{v:"",t:"— not on a card —"},
     .map(pu => ({v:`${L.id}:${pu.id}`, t:`${L.label} · ${pu.label} · ${money(pu.amount)} · ${nice(pu.date)}`})))];
 
 const owedFields = o => [
-  {name:"who",label:"Who owes you",value:o?.who ?? "",required:1},
-  {name:"amount",label:"How much",type:"number",value:o?.amount ?? "",required:1},
-  {name:"due",label:"Expected back on",type:"date",value:o?.due ?? ""},
-  {name:"note",label:"What for",value:o?.note ?? ""},
+  {name:"personId",label:"Who owes you",type:"select",value:o?.personId ?? "",
+   options:[{v:"",t:"— someone new —"}, ...S.people.map(x=>({v:x.id,t:x.name}))]},
+  {name:"newName",label:"Their name (only for someone new)",value:""},
   {name:"pur",label:"Paid with a card purchase",type:"select",options:purchaseOptions(),
    value: o?.purchaseId ? `${o.loanId}:${o.purchaseId}` : ""},
+  {name:"amount",label:"How much",type:"number",value:o?.amount ?? ""},
+  {name:"note",label:"What for",value:o?.note ?? ""},
 ];
 const splitPur = v => { const [loanId, purchaseId] = String(v||"").split(":"); return {loanId:loanId||"", purchaseId:purchaseId||""}; };
 
+// Picking a purchase fills the amount and description from it and locks both — a
+// card-backed debt IS the purchase, so letting the two be edited apart invites drift.
+// Same idea for the name box, which only means anything when adding someone new.
+function wireOwedDialog(){
+  const f = $("#dlgForm");
+  const pur = f.querySelector('select[name="pur"]');
+  const amt = f.querySelector('input[name="amount"]');
+  const note = f.querySelector('input[name="note"]');
+  const who = f.querySelector('select[name="personId"]');
+  const nm  = f.querySelector('input[name="newName"]');
+  const sync = ()=>{
+    const {loanId, purchaseId} = splitPur(pur.value);
+    const L = loan(loanId);
+    const bought = L && isCard(L) ? (L.purchases||[]).find(x=>x.id===purchaseId) : null;
+    amt.readOnly = note.readOnly = !!bought;
+    amt.classList.toggle("locked", !!bought);
+    note.classList.toggle("locked", !!bought);
+    if(bought){ amt.value = bought.amount; note.value = bought.label; }
+    nm.disabled = !!who.value;
+    nm.classList.toggle("locked", !!who.value);
+  };
+  pur.onchange = sync; who.onchange = sync; sync();
+}
+// Resolves the person select plus the "someone new" box down to a single profile id,
+// reusing an existing profile when the typed name already matches one.
+function resolvePerson(d){
+  if(d.personId && person(d.personId)) return d.personId;
+  const nm = String(d.newName || "").trim() || "Someone";
+  const existing = S.people.find(x => x.name.toLowerCase() === nm.toLowerCase());
+  if(existing) return existing.id;
+  const made = {id:uid(), name:nm, brand:""};
+  S.people.push(made);
+  return made.id;
+}
+
 $("#addOwed").onclick = ()=>{
   const f = owedFields(null);
-  f.hint = "Link it to a card purchase if you fronted the money — the section then shows what your position becomes once they pay you back.";
+  f.hint = "Pick the card purchase if you fronted the money — the amount and what it was for then come straight from it.";
   ask("Someone owes you", f, (v,d)=>{ if(v!=="ok") return;
-    const amt = r2(d.amount); if(!(amt > 0)) return;
-    S.owed.push({id:uid(), who:d.who, amount:amt, due:d.due||"", note:d.note||"",
-                 ...splitPur(d.pur), settled:false});
-    logIt(`${d.who} owes you ${money(amt)}`); render(); });
+    const link = splitPur(d.pur), amt = r2(d.amount);
+    if(!link.purchaseId && !(amt > 0))
+      return alert("Enter an amount, or pick the card purchase it was paid with.");
+    const personId = resolvePerson(d);
+    const row = {id:uid(), personId, amount:amt, note:d.note||"", ...link, settled:false};
+    S.owed.push(row);
+    logIt(`${person(personId).name} owes you ${money(owedAmount(row))}`); render(); });
+  wireOwedDialog();
 };
 
 const wishFields = w => [
@@ -1854,7 +1935,7 @@ function reorder(id, dir){
 }
 
 document.body.addEventListener("click", e=>{
-  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-allowance-claimed],[data-allowance-add],[data-xfer],[data-day],[data-edit-wish],[data-edit-owed],[data-owed-settle]");
+  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-allowance-claimed],[data-allowance-add],[data-xfer],[data-day],[data-edit-wish],[data-edit-owed],[data-owed-settle],[data-edit-person]");
   if(!t) return;
   const pick = k => { const [id,i] = (t.dataset[k]||"").split(":"); return [loan(id), +i]; };
   const pickCard = k => { const [id,key] = (t.dataset[k]||"").split(":"); return [loan(id), key]; };
@@ -1887,19 +1968,39 @@ document.body.addEventListener("click", e=>{
   if(t.dataset.editOwed){
     const o = S.owed.find(x=>x.id===t.dataset.editOwed); if(!o) return;
     const f = owedFields(o);
-    f.del = `Delete the ${money(o.amount)} ${o.who} owes you?`;
-    ask("Edit "+o.who, f, (v,d)=>{
-      if(v==="del"){ S.owed = S.owed.filter(x=>x.id!==o.id); logIt(`Removed the debt from ${o.who}`); return render(); }
+    f.del = `Delete the ${money(owedAmount(o))} ${person(o.personId)?.name || "someone"} owes you?`;
+    ask("Edit debt", f, (v,d)=>{
+      if(v==="del"){ S.owed = S.owed.filter(x=>x.id!==o.id); logIt("Removed a debt"); return render(); }
       if(v!=="ok") return;
-      o.who=d.who; o.amount=r2(d.amount); o.due=d.due||""; o.note=d.note||"";
-      Object.assign(o, splitPur(d.pur));
+      const link = splitPur(d.pur), amt = r2(d.amount);
+      if(!link.purchaseId && !(amt > 0))
+        return alert("Enter an amount, or pick the card purchase it was paid with.");
+      o.personId = resolvePerson(d); o.amount = amt; o.note = d.note||"";
+      Object.assign(o, link);
+      render(); });
+    wireOwedDialog();
+  }
+  if(t.dataset.editPerson){
+    const who = person(t.dataset.editPerson); if(!who) return;
+    const mine = S.owed.filter(o=>o.personId===who.id);
+    const f = [{name:"name",label:"Name",value:who.name,required:1},
+               {name:"bd",label:"Colour",type:"brand",value:{brand:who.brand, fallback:"#0066cc"}}];
+    f.del = `Delete ${who.name} and the ${mine.length} debt${mine.length===1?"":"s"} recorded against them?`;
+    ask("Edit "+who.name, f, (v,d)=>{
+      if(v==="del"){
+        S.people = S.people.filter(x=>x.id!==who.id);
+        S.owed = S.owed.filter(o=>o.personId!==who.id);
+        logIt(`Removed ${who.name}`); return render();
+      }
+      if(v!=="ok") return;
+      who.name = d.name; who.brand = d.bd_brand||"";
       render(); });
   }
   // Marks it repaid without moving money, matching how wallet balances are kept by hand.
   if(t.dataset.owedSettle){
     const o = S.owed.find(x=>x.id===t.dataset.owedSettle); if(!o) return;
     o.settled = true;
-    logIt(`${o.who} paid back ${money(o.amount)}`); render();
+    logIt(`${person(o.personId)?.name || "Someone"} paid back ${money(owedAmount(o))}`); render();
   }
 
   if(t.dataset.editWish){
@@ -2341,31 +2442,54 @@ function demo(){
        accounts:[{id:"m",parent:null,name:"Main",kind:"gotyme",bal:1000,loanId:""}],
        loans:[rebuildCard({id:"C",provider:"Card",label:"Card",ref:"",freq:"card",limit:9000,
               sDay:9,dDay:19,items:[],purchases:[{id:"P",date:today(),label:"Thing",amount:600}]})],
-       owed:[{id:"o1",who:"Sam",amount:300,due:"",note:"",loanId:"C",purchaseId:"P",settled:false},
-             {id:"o2",who:"Alex",amount:200,due:"",note:"",loanId:"",purchaseId:"",settled:false},
-             {id:"o3",who:"Jo",amount:900,due:"",note:"",loanId:"",purchaseId:"",settled:true}]};
-  ok(owedToMe()===500, "settled debts drop out of what you are owed", owedToMe());
-  ok(owedOnCard()===300, "only the card-backed part is reported as already a liability", owedOnCard());
-  ok(receivables().length===2, "settled debts drop out of the list");
-  ok(purchaseOf(S.owed[0]).pu.label==="Thing", "a linked purchase resolves to its card and row");
-  ok(purchaseOf(S.owed[1])===null, "an unlinked debt has no purchase");
+       people:[{id:"s",name:"Sam",brand:""},{id:"a",name:"Alex",brand:""}],
+       owed:[{id:"o1",personId:"s",amount:0,note:"",loanId:"C",purchaseId:"P",settled:false},
+             {id:"o2",personId:"a",amount:200,note:"Lunch",loanId:"",purchaseId:"",settled:false},
+             {id:"o3",personId:"a",amount:150,note:"Ticket",loanId:"",purchaseId:"",settled:false},
+             {id:"o4",personId:"s",amount:900,note:"Old",loanId:"",purchaseId:"",settled:true}]};
+
+  // a card-backed debt takes its amount and description from the purchase, not its own fields
+  ok(owedAmount(S.owed[0])===600, "a linked debt is worth what the purchase cost", owedAmount(S.owed[0]));
+  ok(owedLabel(S.owed[0])==="Thing", "a linked debt is described by the purchase");
+  ok(owedAmount(S.owed[1])===200 && owedLabel(S.owed[1])==="Lunch", "an unlinked debt uses its own fields");
+  S.loans[0].purchases[0].amount = 750; rebuildCard(S.loans[0]);
+  ok(owedAmount(S.owed[0])===750, "editing the purchase moves the debt with it");
+
+  ok(owedToMe()===1100, "settled debts drop out of what you are owed", owedToMe());
+  ok(owedOnCard()===750, "only the card-backed part counts as already a liability", owedOnCard());
+  ok(receivables().length===3, "settled debts drop out of the list");
+
+  // grouping: one row per person, biggest debtor first, settled excluded
+  const gs = owedByPerson();
+  ok(gs.length===2, "debts are grouped per person", gs.length);
+  ok(gs[0].who.name==="Sam" && gs[0].total===750, "the biggest debtor leads", gs[0]);
+  ok(gs[1].who.name==="Alex" && gs[1].items.length===2 && gs[1].total===350, "a person's debts are gathered together", gs[1]);
+  ok(gs.every(g=>g.items.every(o=>!o.settled)), "settled debts never appear in a group");
 
   // the net position is unchanged by a receivable; only the "once settled" figure moves
   const netNow = r2(S.accounts.reduce((x,a)=>x+a.bal,0) - S.loans.reduce((x,L)=>x+unpaid(L).reduce((t,i)=>t+i.amount,0),0));
-  ok(netNow===400, "net counts the card liability in full while it is unpaid", netNow);
-  ok(r2(netNow + owedToMe())===900, "once settled adds back exactly what you are owed");
+  ok(r2(netNow + owedToMe()) - netNow === 1100, "once settled adds back exactly what you are owed");
+  S.owed[0].settled = true;
+  ok(owedToMe()===350 && owedOnCard()===0, "settling removes it from both totals");
 
-  // a purchase that no longer exists must not leave a dangling link
-  const dangling = migrate({accounts:[], log:[], wish:[], loans:[],
+  // --- migration: names become profiles, dangling links are cleaned up ---
+  const up = migrate({accounts:[], loans:[], log:[], wish:[],
+    owed:[{id:"x",who:"Sam",amount:10},{id:"y",who:"sam",amount:5},{id:"z",who:"Jo",amount:7}]});
+  ok(up.people.length===2, "one profile per distinct name, matched case-insensitively", up.people.map(x=>x.name));
+  ok(up.owed[0].personId===up.owed[1].personId, "two debts from the same name share a profile");
+  ok(up.owed.every(o=>o.who===undefined && o.due===undefined), "the old name and due fields are dropped");
+  const orphan = migrate({accounts:[], loans:[], log:[], wish:[], people:[],
+    owed:[{id:"o",personId:"GONE",amount:5}]});
+  ok(orphan.people.length===1 && orphan.owed[0].personId===orphan.people[0].id,
+     "a debt whose profile vanished is given one rather than dropped");
+  const dangling = migrate({accounts:[], log:[], wish:[], loans:[], people:[],
     owed:[{id:"o",who:"Sam",amount:10,loanId:"GONE",purchaseId:"NOPE"}]});
-  ok(dangling.owed.length===1 && dangling.owed[0].loanId==="" && dangling.owed[0].purchaseId==="",
+  ok(dangling.owed[0].loanId==="" && dangling.owed[0].purchaseId==="",
      "a debt survives its linked purchase being deleted, unlinked");
-  ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:"nope"}).owed.length===0, "a wrong-typed debt list degrades to empty");
-  ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:[null,{}]}).owed.length===0, "junk debt entries are dropped");
-  ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:[{id:"x",amount:"12.5"}]}).owed[0].amount===12.5,
+  ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:"nope",people:"nope"}).owed.length===0, "wrong-typed lists degrade to empty");
+  ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:[null,{}],people:[null]}).owed.length===0, "junk entries are dropped");
+  ok(migrate({accounts:[],loans:[],log:[],wish:[],people:[],owed:[{id:"x",who:"A",amount:"12.5"}]}).owed[0].amount===12.5,
      "string amounts are coerced");
-  S.owed[0].settled = true;                                  // what "Settled" does
-  ok(owedToMe()===200 && owedOnCard()===0, "settling removes it from both totals");
 
   ok(r2(0.1+0.2)===0.3, "rounding");
   S = save0; undoStack = []; suppressHistory = false;
