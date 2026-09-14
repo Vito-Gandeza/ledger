@@ -39,6 +39,11 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
   dividing by an average — obligations are lumpy, and an average assumes you save the worst
   week's surplus every week. The headline rate excludes the overdue backlog, which is a
   one-off debt rather than a weekly cost.
+- **Catching up.** Anything past its due date is treated as one backlog to clear rather than
+  part of any week: it comes off the weekly projection's opening balance and gets its own
+  section, grouped per loan and ordered oldest first, with how long it takes to clear at
+  everything you can spare. Before this, twelve late payments buried the ongoing rhythm
+  underneath them in week one.
 - **Payment timeline.** A month calendar with per-loan colour dots and per-day totals. Tap a day
   for its breakdown.
 - **Projection chart.** Eight weeks of closing balance as a column chart above the weekly rows.
@@ -46,6 +51,18 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
 - **Weekly outlook.** Eight rolling weeks, each expandable into the payments that make up its
   cost. Week one carries everything already overdue, and an allowance is only counted as
   incoming income while it has not been claimed — a claimed one already sits in the balance.
+
+## Layout
+
+Four files, loaded as plain classic scripts in order — no modules, no build step, so it
+still opens straight from disk:
+
+| File | What lives there |
+|---|---|
+| `index.html` | Markup and the whole stylesheet |
+| `data.js` | Money and date model, migration, storage, sync, selectors |
+| `render.js` | Everything that computes a view and draws it |
+| `app.js` | Dialogs, event wiring, boot, self-check |
 
 ## Running it
 
