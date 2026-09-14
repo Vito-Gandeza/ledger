@@ -23,7 +23,8 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
 - **Owed to you.** Debts other people owe you, grouped under a profile per person so several
   debts from the same person stay together. A debt can be linked to the card purchase you
   fronted it on, in which case its amount and description come from that purchase and follow
-  any edit to it. Because a card-backed debt is already counted as a liability, the section
+  any edit to it. If you only covered part of a shared bill, set their share — half, a third,
+  a quarter, or an amount you type — and the share follows the purchase too. Because a card-backed debt is already counted as a liability, the section
   shows your position now against what it becomes once everyone pays — the headline number
   never moves until the money is actually in a wallet.
 - **Assume settled.** A switch in the header recomputes every stock of money in the app as if

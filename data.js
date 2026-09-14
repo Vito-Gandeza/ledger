@@ -174,6 +174,10 @@ function migrate(s){
   s.owed = Array.isArray(s.owed) ? s.owed.filter(o => o && typeof o === "object" && o.id).map(o => ({
     ...o, amount:r2(o.amount),
     note: typeof o.note === "string" ? o.note : "",
+    // Their share of a linked purchase: 1 is the whole thing, 0.5 half, and 0 means the
+    // amount is kept explicitly instead. Absent on older data, which predates splitting
+    // and therefore always meant the whole purchase.
+    share: Number.isFinite(+o.share) ? +o.share : 1,
     personId:   typeof o.personId   === "string" ? o.personId   : "",
     loanId:     typeof o.loanId     === "string" ? o.loanId     : "",
     purchaseId: typeof o.purchaseId === "string" ? o.purchaseId : "",

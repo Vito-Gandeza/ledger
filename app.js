@@ -107,6 +107,8 @@ const owedFields = o => [
   {name:"newName",label:"Their name (only for someone new)",value:""},
   {name:"pur",label:"Paid with a card purchase",type:"select",options:purchaseOptions(),
    value: o?.purchaseId ? `${o.loanId}:${o.purchaseId}` : ""},
+  {name:"share",label:"How much of it is theirs",type:"select",
+   options:SHARES.map(x=>({v:x.v,t:x.t})), value: o ? shareOf(o) : 1},
   {name:"amount",label:"How much",type:"number",value:o?.amount ?? ""},
   {name:"note",label:"What for",value:o?.note ?? ""},
 ];
@@ -118,6 +120,7 @@ const splitPur = v => { const [loanId, purchaseId] = String(v||"").split(":"); r
 function wireOwedDialog(){
   const f = $("#dlgForm");
   const pur = f.querySelector('select[name="pur"]');
+  const share = f.querySelector('select[name="share"]');
   const amt = f.querySelector('input[name="amount"]');
   const note = f.querySelector('input[name="note"]');
   const who = f.querySelector('select[name="personId"]');
@@ -126,14 +129,24 @@ function wireOwedDialog(){
     const {loanId, purchaseId} = splitPur(pur.value);
     const L = loan(loanId);
     const bought = L && isCard(L) ? (L.purchases||[]).find(x=>x.id===purchaseId) : null;
-    amt.readOnly = note.readOnly = !!bought;
-    amt.classList.toggle("locked", !!bought);
+    const sh = Number(share.value);
+    // Splitting only means anything against a purchase, and the amount is only typed in
+    // when it is not being worked out from one.
+    share.disabled = !bought;
+    share.classList.toggle("locked", !bought);
+    const derived = !!bought && sh > 0;
+    amt.readOnly = derived;
+    amt.classList.toggle("locked", derived);
+    note.readOnly = !!bought;
     note.classList.toggle("locked", !!bought);
-    if(bought){ amt.value = bought.amount; note.value = bought.label; }
+    if(bought){
+      note.value = bought.label;
+      if(derived) amt.value = r2(bought.amount * sh);
+    }
     nm.disabled = !!who.value;
     nm.classList.toggle("locked", !!who.value);
   };
-  pur.onchange = sync; who.onchange = sync; sync();
+  pur.onchange = sync; share.onchange = sync; who.onchange = sync; sync();
 }
 // Resolves the person select plus the "someone new" box down to a single profile id,
 // reusing an existing profile when the typed name already matches one.
@@ -149,13 +162,14 @@ function resolvePerson(d){
 
 $("#addOwed").onclick = ()=>{
   const f = owedFields(null);
-  f.hint = "Pick the card purchase if you fronted the money — the amount and what it was for then come straight from it.";
+  f.hint = "Pick the card purchase if you fronted the money — the amount and what it was for then come straight from it. If you only covered part of a shared bill, set their share.";
   ask("Someone owes you", f, (v,d)=>{ if(v!=="ok") return;
     const link = splitPur(d.pur), amt = r2(d.amount);
     if(!link.purchaseId && !(amt > 0))
       return alert("Enter an amount, or pick the card purchase it was paid with.");
     const personId = resolvePerson(d);
-    const row = {id:uid(), personId, amount:amt, note:d.note||"", ...link, settled:false};
+    const row = {id:uid(), personId, amount:amt, note:d.note||"",
+                 share: link.purchaseId ? Number(d.share) : 1, ...link, settled:false};
     S.owed.push(row);
     logIt(`${person(personId).name} owes you ${money(owedAmount(row))}`); render(); });
   wireOwedDialog();
@@ -278,6 +292,7 @@ document.body.addEventListener("click", e=>{
       if(!link.purchaseId && !(amt > 0))
         return alert("Enter an amount, or pick the card purchase it was paid with.");
       o.personId = resolvePerson(d); o.amount = amt; o.note = d.note||"";
+      o.share = link.purchaseId ? Number(d.share) : 1;
       Object.assign(o, link);
       render(); });
     wireOwedDialog();
@@ -779,6 +794,28 @@ function demo(){
 
   // a card-backed debt takes its amount and description from the purchase, not its own fields
   ok(owedAmount(S.owed[0])===600, "a linked debt is worth what the purchase cost", owedAmount(S.owed[0]));
+  // --- splitting a shared bill ---
+  S.owed[0].share = 0.5;
+  ok(owedAmount(S.owed[0])===300, "half a 600 purchase is 300", owedAmount(S.owed[0]));
+  ok(owedToMe()===r2(300+200+150), "a share counts as a share in the totals", owedToMe());
+  S.assumePaid = true;   // offsets only exist in assume-settled mode
+  ok(cardOffsets().get("C|"+cycleFor(today(),9,19).due)===300,
+     "and only their half is offset against the statement", [...cardOffsets()]);
+  ok(cashOwed()===350 && cardOwed()===300, "the other two debts stay spendable cash", [cashOwed(), cardOwed()]);
+  S.assumePaid = false;
+  S.loans[0].purchases[0].amount = 800; rebuildCard(S.loans[0]);
+  ok(owedAmount(S.owed[0])===400, "a share still follows the purchase when it is corrected");
+  S.owed[0].share = 1/3;
+  ok(owedAmount(S.owed[0])===266.67, "a third rounds to cents", owedAmount(S.owed[0]));
+  S.owed[0].share = 0; S.owed[0].amount = 125;
+  ok(owedAmount(S.owed[0])===125, "share 0 means the amount is kept explicitly");
+  ok(shareLabel(1)==="" && shareLabel(0.5)==="half of " && shareLabel(1/3)==="a third of ",
+     "shares read as words");
+  ok(migrate({accounts:[],loans:[],log:[],wish:[],people:[],
+     owed:[{id:"x",personId:"p",amount:5}]}).owed[0].share===1,
+     "data from before splitting means the whole purchase");
+  S.owed[0].share = 1; S.owed[0].amount = 0;
+  S.loans[0].purchases[0].amount = 600; rebuildCard(S.loans[0]);
   ok(owedLabel(S.owed[0])==="Thing", "a linked debt is described by the purchase");
   ok(owedAmount(S.owed[1])===200 && owedLabel(S.owed[1])==="Lunch", "an unlinked debt uses its own fields");
   S.loans[0].purchases[0].amount = 750; rebuildCard(S.loans[0]);

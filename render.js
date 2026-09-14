@@ -522,7 +522,26 @@ const purchaseOf = o => {
 };
 // A card-backed debt IS the purchase: its amount and what it was for come from there, so
 // editing the purchase moves the debt with it and neither can go stale.
-const owedAmount = o => { const l = purchaseOf(o); return l ? r2(l.pu.amount) : r2(o.amount); };
+const SHARES = [
+  {v:1,    t:"All of it"},
+  {v:0.5,  t:"Half"},
+  {v:1/3,  t:"A third"},
+  {v:0.25, t:"A quarter"},
+  {v:0,    t:"Custom amount"},
+];
+const near = (a,b) => Math.abs(a-b) < 1e-9;
+const shareLabel = sh =>
+  near(sh,1) ? "" : near(sh,0.5) ? "half of " : near(sh,1/3) ? "a third of "
+  : near(sh,0.25) ? "a quarter of " : "part of ";
+const shareOf = o => Number.isFinite(+o.share) ? +o.share : 1;
+// A share of a linked purchase still follows that purchase: split a bill in half and
+// correcting the bill later moves both halves with it.
+const owedAmount = o => {
+  const l = purchaseOf(o);
+  if(!l) return r2(o.amount);
+  const sh = shareOf(o);
+  return sh > 0 ? r2(l.pu.amount * sh) : r2(o.amount);
+};
 const owedLabel  = o => { const l = purchaseOf(o); return l ? l.pu.label : (o.note || ""); };
 
 const receivables = () => S.owed.filter(o => !o.settled);
@@ -719,7 +738,8 @@ function renderOwed(){
         const link = purchaseOf(o);
         return `<div class="row kid">
           <div class="grow"><div class="name">${esc(owedLabel(o) || "No description")}</div>
-            ${link?`<div class="sub"><span class="pill due">on ${esc(link.L.label)}</span> ${nice(link.pu.date)}</div>`
+            ${link?`<div class="sub"><span class="pill due">on ${esc(link.L.label)}</span> ${
+             shareOf(o) > 0 && !near(shareOf(o),1) ? `${shareLabel(shareOf(o))}${money(link.pu.amount)} &middot; ` : ""}${nice(link.pu.date)}</div>`
                   :`<div class="sub">not on a card</div>`}</div>
           <div class="amt num">${money(owedAmount(o))}</div>
           <div class="rowacts">
