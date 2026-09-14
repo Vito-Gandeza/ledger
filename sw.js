@@ -2,7 +2,7 @@
 // when there's no signal) so a shipped fix is never stuck behind a stale cached copy — that
 // exact staleness (cache-first on index.html) was why earlier fixes didn't visibly land.
 // Static assets (icon, manifest) stay cache-first since they rarely change.
-const CACHE = "ledger-v3";
+const CACHE = "ledger-v4";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", e => {

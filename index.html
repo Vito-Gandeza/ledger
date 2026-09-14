@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ledger">
-<meta name="theme-color" content="#0a0c12" media="(prefers-color-scheme:dark)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme:dark)">
 <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme:light)">
 <meta name="description" content="A private envelope-budgeting ledger for instalment loans and credit cards. Your data never leaves your device.">
 <title>Ledger</title>
@@ -24,8 +24,8 @@
 :root{
   --bg:#f2f2f5; --fg:#1d1d1f; --fg2:#424245; --dim:#6e6e73;
   --line:#d8d8dd; --line-soft:#ebebef; --card:#ffffff; --sunk:#f6f6f8;
-  --accent:#2f6fd0; --accent-hi:#3d7fe0; --on-accent:#ffffff;
-  --good:#127a52; --warn:#96590f; --bad:#c23b50;
+  --accent:#0066cc; --accent-hi:#0071e3; --on-accent:#ffffff;
+  --good:#117a48; --warn:#9a530c; --bad:#c9332b;
   --r:18px; --r-md:12px; --r-sm:8px; --pill:9999px;
   --pad:clamp(16px,4.2vw,32px); --maxw:760px; --nav:52px;
   --ease:cubic-bezier(.22,1,.36,1);
@@ -33,15 +33,12 @@
   --lift-hi:0 1px 2px rgba(0,0,0,.05), 0 18px 40px -22px rgba(0,0,0,.28);
 }
 @media (prefers-color-scheme:dark){
-  /* Neutral graphite rather than pure black, so surfaces can sit above the canvas without
-     the page reading as a coloured field. Text stops short of pure white and the accent is
-     a desaturated sky blue — both chosen to keep luminance contrast comfortable on dark. */
-  :root{ --bg:#0d1117; --fg:#dde3ec; --fg2:#a9b2c1; --dim:#737d8c;
-         --line:#262d38; --line-soft:#1a212a; --card:#151b23; --sunk:#1b222c;
-         --accent:#7aa2f7; --accent-hi:#93b5f9; --on-accent:#0d1117;
-         --good:#5ac489; --warn:#e0a34a; --bad:#f0707f;
-         --lift:0 0 0 1px rgba(255,255,255,.04), 0 6px 18px -12px rgba(0,0,0,.7);
-         --lift-hi:0 0 0 1px rgba(255,255,255,.055), 0 18px 40px -26px rgba(0,0,0,.9); }
+  :root{ --bg:#000000; --fg:#f5f5f7; --fg2:#c7c7cc; --dim:#98989d;
+         --line:#38383a; --line-soft:#2c2c2e; --card:#1c1c1e; --sunk:#2c2c2e;
+         --accent:#2997ff; --accent-hi:#409cff;
+         --good:#30d158; --warn:#ff9f0a; --bad:#ff453a;
+         --lift:0 0 0 1px rgba(255,255,255,.04), 0 6px 18px -10px rgba(0,0,0,.8);
+         --lift-hi:0 0 0 1px rgba(255,255,255,.06), 0 20px 44px -24px rgba(0,0,0,1); }
 }
 
 *{box-sizing:border-box; margin:0; padding:0}
@@ -89,7 +86,8 @@ body[data-state="empty"] .topbar{display:none}
 .col{display:contents}
 @media (max-width:1079px){
   .a-hero{order:0} .a-plan{order:1} .a-weekly{order:2} .a-wallets{order:3}
-  .a-wish{order:4} .a-cards{order:5} .a-timeline{order:6} .a-loans{order:7} .a-log{order:8} .a-foot{order:9}
+  .a-owed{order:4} .a-wish{order:5} .a-cards{order:6} .a-timeline{order:7}
+  .a-loans{order:8} .a-log{order:9} .a-foot{order:10}
 }
 @media (min-width:1080px){
   :root{--maxw:1200px}
@@ -105,6 +103,8 @@ body[data-state="empty"] .topbar{display:none}
    without it the most important figure on the page had the least visual weight. */
 .hero{background:var(--card); border:1px solid var(--line); border-radius:var(--r);
   box-shadow:var(--lift-hi); padding:24px; position:relative; overflow:hidden}
+.hero::before{content:""; position:absolute; inset:0 0 auto 0; height:150px; pointer-events:none;
+  background:radial-gradient(120% 100% at 0% 0%, color-mix(in srgb,var(--accent) 12%,transparent), transparent 70%)}
 .hero > *{position:relative}
 .net{font-size:clamp(38px,10.5vw,52px); font-weight:600; line-height:1.05; letter-spacing:-.035em; margin:4px 0 20px}
 .split{display:grid; gap:16px 20px; grid-template-columns:repeat(auto-fit,minmax(138px,1fr));
@@ -166,7 +166,8 @@ button{background:none; border:0; cursor:pointer}
   transition:transform .16s var(--ease), background .16s, border-color .16s, opacity .16s}
 .btn:active{transform:scale(.95)}
 .btn:focus-visible{outline:2px solid var(--accent-hi); outline-offset:2px}
-.btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent); box-shadow:none}
+.btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent);
+  box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 18px -12px var(--accent)}
 .btn.ghost{border-color:transparent; background:none; color:var(--accent); padding:8px 10px; box-shadow:none}
 .btn.mini{padding:5px 12px; font-size:13px; min-height:30px}
 .btn.big{padding:12px 24px; font-size:17px; min-height:46px}
@@ -340,6 +341,22 @@ dialog h3{margin-bottom:20px}
 .fold:first-child{border-top:0}
 .foldfoot{padding:4px 16px 14px}
 
+/* ---------- owed to you ---------- */
+.owedviz{padding:18px 16px 16px; border-bottom:1px solid var(--line-soft)}
+.owedrow{display:flex; align-items:center; gap:12px; margin-bottom:10px}
+.owedrow .lbl{flex:none; width:104px; font-size:13px; color:var(--dim)}
+.owedrow .track{flex:1; min-width:0; height:10px; border-radius:var(--pill);
+  background:color-mix(in srgb, var(--fg) 8%, transparent); overflow:hidden}
+.owedrow .track i{display:block; height:100%; border-radius:var(--pill); transition:width .7s var(--ease)}
+.owedrow .track i.neg{background:var(--bad)}
+.owedrow .track i.pos{background:var(--good)}
+.owedrow .num{flex:none; font-weight:600; font-size:15px}
+/* The headline and its qualifier stack rather than sharing a line — wrapping mid-phrase
+   split "coming back to you" around the note beside it. */
+.owedsum{display:flex; flex-direction:column; gap:3px; font-size:14px;
+  font-weight:600; padding-top:10px; border-top:1px solid var(--line-soft); margin-top:14px}
+.owedsum .sub{font-weight:400}
+
 /* ---------- wishlist ----------
    A ring rather than another bar: this section is about motivation, and it should not
    look like the obligations elsewhere in the app. */
@@ -407,7 +424,7 @@ body.boot .a-hero{animation-delay:.02s}
 body.boot .a-plan{animation-delay:.09s}
 body.boot .a-weekly{animation-delay:.16s}
 body.boot .a-wallets{animation-delay:.22s}
-body.boot .a-wish{animation-delay:.26s}
+body.boot .a-owed, body.boot .a-wish{animation-delay:.26s}
 body.boot .a-cards, body.boot .a-timeline{animation-delay:.30s}
 body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
 #welcome{animation:rise .7s var(--ease) backwards .1s}
@@ -452,6 +469,7 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
       <div><div class="eyebrow">Owed</div><div class="v num bad" id="owed">&#8369;0</div></div>
       <div><div class="eyebrow">Safe to spend</div><div class="v num" id="safe">&#8369;0</div><div class="sub" id="safeNote"></div></div>
       <div><div class="eyebrow">Debt-free</div><div class="v" id="freeBy">&mdash;</div><div class="sub" id="freeNote"></div></div>
+      <div id="owedMeWrap" hidden><div class="eyebrow">Owed to you</div><div class="v num ok" id="owedMe">&#8369;0</div><div class="sub" id="owedMeNote"></div></div>
     </div>
     <div id="alert"></div>
   </header>
@@ -500,6 +518,13 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
     <section class="a-weekly">
       <div class="shead"><h2>Weekly outlook</h2><span class="sub" id="wkNote"></span></div>
       <div class="card" id="weekly"></div>
+    </section>
+
+    <section class="a-owed">
+      <div class="shead"><h2>Owed to you</h2>
+        <div class="acts"><span class="sub" id="owedNote"></span><button class="btn" id="addOwed">+ Debt</button></div>
+      </div>
+      <div class="card" id="owedList"></div>
     </section>
 
     <section class="a-timeline">
@@ -639,8 +664,8 @@ const brandMark = (x, fallback) => x?.logo
 const colorOf = L => COLORS[Math.max(0,S.loans.findIndex(x=>x.id===L.id)) % COLORS.length];
 
 // ---------- data ----------
-const DATA_V = 4;
-const blank = () => ({v:DATA_V, accounts:[], loans:[], log:[], wish:[]});
+const DATA_V = 5;
+const blank = () => ({v:DATA_V, accounts:[], loans:[], log:[], wish:[], owed:[]});
 
 function starter(){
   const main = uid();
@@ -649,12 +674,12 @@ function starter(){
     {id:uid(), parent:main, name:"Myself",       kind:"gotyme", bal:0, loanId:"income"},
     {id:uid(), parent:null, name:"GCash",        kind:"gcash",  bal:0, loanId:""},
     {id:uid(), parent:null, name:"Cash on hand", kind:"cash",   bal:0, loanId:""},
-  ], loans:[], log:[], wish:[]};
+  ], loans:[], log:[], wish:[], owed:[]};
 }
 
 // Fictional numbers, purely so a first-time visitor can see how the pieces fit.
 function demoData(){
-  const main=uid(), a=uid(), b=uid(), card=uid();
+  const main=uid(), a=uid(), b=uid(), card=uid(), pur=uid();
   return {v:DATA_V, accounts:[
     {id:main,  parent:null, name:"Main bank",    kind:"gotyme", bal:250,  loanId:""},
     {id:uid(), parent:main, name:"Myself",       kind:"gotyme", bal:2000, loanId:"income"},
@@ -670,10 +695,15 @@ function demoData(){
      items: gen(addDays(today(),10), 4, "2weeks", 1250)},
     rebuildCard({id:card, provider:"Card", label:"Credit card", ref:"", freq:"card",
      limit:8000, sDay:9, dDay:19, items:[],
-     purchases:[{id:uid(), date:addDays(today(),-2), label:"Subscription", amount:1410.39}]}),
-  ], log:[], allowance:{weekday:new Date().getDay(), amount:2500, lastAdded:today()}, wish:[
-    {id:uid(), name:"Mechanical keyboard", cost:4800, brand:"#7aa2f7", logo:""},
-    {id:uid(), name:"Weekend trip", cost:12000, brand:"#5ac489", logo:""},
+     purchases:[{id:pur, date:addDays(today(),-2), label:"Subscription", amount:1410.39}]}),
+  ], log:[], allowance:{weekday:new Date().getDay(), amount:2500, lastAdded:today()},
+  owed:[{id:uid(), who:"Sam", amount:705.20, due:addDays(today(),9), note:"Half the subscription",
+         loanId:card, purchaseId:pur, settled:false},
+        {id:uid(), who:"Alex", amount:400, due:addDays(today(),-3), note:"Lunch",
+         loanId:"", purchaseId:"", settled:false}],
+  wish:[
+    {id:uid(), name:"Mechanical keyboard", cost:4800, brand:"#2997ff", logo:""},
+    {id:uid(), name:"Weekend trip", cost:12000, brand:"#3ecf9a", logo:""},
   ]};
 }
 
@@ -685,6 +715,16 @@ function migrate(s){
   if(!Array.isArray(s.accounts)) s.accounts = [];
   if(!Array.isArray(s.loans))    s.loans = [];
   if(!Array.isArray(s.log))      s.log = [];
+  // Money other people owe YOU. When it is tied to a card purchase it is already counted
+  // as a liability, so it hits the net position twice until they pay it back.
+  s.owed = Array.isArray(s.owed) ? s.owed.filter(o => o && typeof o === "object" && o.id).map(o => ({
+    ...o, who:String(o.who ?? "Someone"), amount:r2(o.amount),
+    due:  typeof o.due  === "string" ? o.due  : "",
+    note: typeof o.note === "string" ? o.note : "",
+    loanId:     typeof o.loanId     === "string" ? o.loanId     : "",
+    purchaseId: typeof o.purchaseId === "string" ? o.purchaseId : "",
+    settled: !!o.settled,
+  })) : [];
   // A wish can either track a real section's balance or hold a number you keep yourself.
   s.wish = Array.isArray(s.wish) ? s.wish.filter(w => w && typeof w === "object" && w.id).map(w => ({
     ...w, name:String(w.name ?? "Untitled"), cost:r2(w.cost), saved:r2(w.saved),
@@ -703,6 +743,14 @@ function migrate(s){
   const ids = new Set(s.accounts.map(a=>a.id));
   for(const a of s.accounts) if(a.parent && !ids.has(a.parent)) a.parent = null;
   for(const w of s.wish) if(w.accId && !ids.has(w.accId)) w.accId = "";
+  // A purchase that has since been deleted must not leave a dangling link behind.
+  for(const o of s.owed){
+    if(!o.purchaseId) continue;
+    const L = s.loans.find(x => x.id === o.loanId);
+    if(!L || !isCard(L) || !(L.purchases||[]).some(pp => pp.id === o.purchaseId)){
+      o.loanId = ""; o.purchaseId = "";
+    }
+  }
   s.loans = s.loans.filter(L => L && typeof L === "object" && L.id);
   for(const L of s.loans){
     if(typeof L.brand !== "string") L.brand = "";
@@ -989,6 +1037,15 @@ function paint(){
   $("#safeNote").textContent = gaps>0
     ? `after ${money(gaps)} of top-ups, until your next allowance` : "until your next allowance";
 
+  // Money coming back to you is not an asset yet, so it never moves the headline number —
+  // it sits beside it as the figure that number becomes once people pay.
+  const back = owedToMe();
+  $("#owedMeWrap").hidden = back <= 0;
+  if(back > 0){
+    tween($("#owedMe"), back);
+    $("#owedMeNote").textContent = `net ${money(r2(assets - owed + back))} once settled`;
+  }
+
   const last = S.loans.flatMap(unpaid).map(i=>i.due).sort().pop();
   $("#freeBy").textContent = last ? niceY(last) : "clear";
   $("#freeNote").textContent = last ? `${Math.ceil(daysTo(last)/7)} weeks left` : "";
@@ -1007,7 +1064,7 @@ function paint(){
   }
   $("#alert").innerHTML = alertHtml;
 
-  renderAccounts(); renderCards(); renderLoans(); renderPlan(); renderTimeline(); renderWeekly(); renderWish();
+  renderAccounts(); renderCards(); renderLoans(); renderPlan(); renderTimeline(); renderWeekly(); renderWish(); renderOwed();
   const lc = $("#logCount"); if(lc) lc.textContent = S.log.length ? `${S.log.length} entries` : "nothing yet";
   $("#log").innerHTML = S.log.map(l=>`<div class="row"><div class="grow"><div class="name">${esc(l.t)}</div>
       <div class="sub">${new Date(l.when).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</div></div></div>`
@@ -1410,6 +1467,19 @@ function renderWeekly(){
     `<div class="wkfoot bad">Balance goes negative in the week of ${nice(worst.wStart)}.</div>`);
 }
 
+// ---------- owed to you ----------
+const receivables = () => S.owed.filter(o => !o.settled);
+const owedToMe = () => r2(receivables().reduce((s,o) => s + o.amount, 0));
+// The part you fronted on a card: it is inside `owed` as a liability AND coming back to
+// you, which is the bit that makes the headline number read worse than reality.
+const owedOnCard = () => r2(receivables().filter(o => o.purchaseId).reduce((s,o) => s + o.amount, 0));
+const purchaseOf = o => {
+  const L = loan(o.loanId);
+  if(!L || !isCard(L)) return null;
+  const pu = (L.purchases || []).find(x => x.id === o.purchaseId);
+  return pu ? {L, pu} : null;
+};
+
 // ---------- wishlist ----------
 // What is genuinely spare each week: allowance in, scheduled payments out, averaged.
 // Week 0 is skipped deliberately — it carries the whole overdue backlog, which is a
@@ -1434,6 +1504,55 @@ function wishProgress(w, rate, pot){
            pct: cost > 0 ? Math.min(100, Math.max(0, saved / cost * 100)) : 100,
            when: (weeks === null || weeks === 0) ? null : addDays(today(), weeks * 7),
            weeks };
+}
+
+function renderOwed(){
+  const box = $("#owedList"); if(!box) return;
+  const live = receivables();
+  const total = owedToMe(), onCard = owedOnCard();
+  const assets = r2(S.accounts.reduce((s,a)=>s+a.bal,0));
+  const owedOut = r2(S.loans.reduce((s,L)=>s+unpaid(L).reduce((t,i)=>t+i.amount,0),0));
+  const now = r2(assets - owedOut), after = r2(now + total);
+
+  const note = $("#owedNote");
+  if(note) note.textContent = live.length
+    ? `${live.length} ${live.length>1?"people":"person"}` : "";
+
+  if(!live.length){
+    box.innerHTML = `<div class="empty">Nobody owes you anything right now. Add a debt here and the difference it makes to your position shows above.</div>`;
+    return;
+  }
+
+  // The whole point of the section: what the headline number says versus what it will
+  // say once these land. Both bars share a scale so the gap is the message.
+  const span = Math.max(Math.abs(now), Math.abs(after), 1);
+  const bar = (v, cls) => `<div class="track"><i class="${cls}" style="width:${(Math.abs(v)/span*100).toFixed(1)}%"></i></div>`;
+
+  box.innerHTML = `<div class="owedviz">
+      <div class="owedrow"><span class="lbl">Right now</span>
+        ${bar(now, now<0?"neg":"pos")}<span class="num ${now<0?"bad":""}">${money(now)}</span></div>
+      <div class="owedrow"><span class="lbl">Once they pay</span>
+        ${bar(after, after<0?"neg":"pos")}<span class="num ${after<0?"bad":"ok"}">${money(after)}</span></div>
+      <div class="owedsum"><span class="grow">${money(total)} coming back to you</span>
+        ${onCard>0?`<span class="sub">${money(onCard)} of it already on a card</span>`:""}</div>
+    </div>`
+    + live.sort((a,b)=> (a.due||"9999") < (b.due||"9999") ? -1 : 1).map(o=>{
+      const link = purchaseOf(o);
+      const n = o.due ? daysTo(o.due) : null;
+      const when = n === null ? "" : n < 0 ? `<span class="bad">${-n}d late</span>`
+        : n === 0 ? "due today" : `in ${n}d`;
+      return `<div class="row">
+        <span class="ico">${esc(o.who.trim()[0] || "?").toUpperCase()}</span>
+        <div class="grow"><div class="name">${esc(o.who)}</div>
+          <div class="sub">${o.note?esc(o.note)+" · ":""}${when || "no date set"}</div>
+          ${link?`<div class="sub"><span class="pill due">on ${esc(link.L.label)}</span> ${esc(link.pu.label)} · ${money(link.pu.amount)}</div>`:""}</div>
+        <div class="amt num ok">${money(o.amount)}</div>
+        <div class="rowacts">
+          <button class="btn mini" data-owed-settle="${o.id}">Settled</button>
+          <button class="iconbtn" data-edit-owed="${o.id}" aria-label="Edit">Edit</button>
+        </div>
+      </div>`;
+    }).join("");
 }
 
 function renderWish(){
@@ -1645,10 +1764,36 @@ function addSection(parentId){
     logIt(`Added section ${d.name}`); render(); });
 }
 
+// Every card purchase, as "cardId:purchaseId" so one select carries both halves of the link.
+const purchaseOptions = () => [{v:"",t:"— not on a card —"},
+  ...S.loans.filter(isCard).flatMap(L => (L.purchases||[])
+    .slice().sort((a,b)=> a.date<b.date?1:-1)
+    .map(pu => ({v:`${L.id}:${pu.id}`, t:`${L.label} · ${pu.label} · ${money(pu.amount)} · ${nice(pu.date)}`})))];
+
+const owedFields = o => [
+  {name:"who",label:"Who owes you",value:o?.who ?? "",required:1},
+  {name:"amount",label:"How much",type:"number",value:o?.amount ?? "",required:1},
+  {name:"due",label:"Expected back on",type:"date",value:o?.due ?? ""},
+  {name:"note",label:"What for",value:o?.note ?? ""},
+  {name:"pur",label:"Paid with a card purchase",type:"select",options:purchaseOptions(),
+   value: o?.purchaseId ? `${o.loanId}:${o.purchaseId}` : ""},
+];
+const splitPur = v => { const [loanId, purchaseId] = String(v||"").split(":"); return {loanId:loanId||"", purchaseId:purchaseId||""}; };
+
+$("#addOwed").onclick = ()=>{
+  const f = owedFields(null);
+  f.hint = "Link it to a card purchase if you fronted the money — the section then shows what your position becomes once they pay you back.";
+  ask("Someone owes you", f, (v,d)=>{ if(v!=="ok") return;
+    const amt = r2(d.amount); if(!(amt > 0)) return;
+    S.owed.push({id:uid(), who:d.who, amount:amt, due:d.due||"", note:d.note||"",
+                 ...splitPur(d.pur), settled:false});
+    logIt(`${d.who} owes you ${money(amt)}`); render(); });
+};
+
 const wishFields = w => [
   {name:"name",label:"What is it",value:w?.name ?? "",required:1},
   {name:"cost",label:"How much does it cost",type:"number",value:w?.cost ?? "",required:1},
-  {name:"bd",label:"Colour and logo",type:"brand",value:{brand:w?.brand, logo:w?.logo, fallback:"#2f6fd0"}},
+  {name:"bd",label:"Colour and logo",type:"brand",value:{brand:w?.brand, logo:w?.logo, fallback:"#0066cc"}},
 ];
 $("#addWish").onclick = ()=>{
   const f = wishFields(null);
@@ -1709,7 +1854,7 @@ function reorder(id, dir){
 }
 
 document.body.addEventListener("click", e=>{
-  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-allowance-claimed],[data-allowance-add],[data-xfer],[data-day],[data-edit-wish]");
+  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-allowance-claimed],[data-allowance-add],[data-xfer],[data-day],[data-edit-wish],[data-edit-owed],[data-owed-settle]");
   if(!t) return;
   const pick = k => { const [id,i] = (t.dataset[k]||"").split(":"); return [loan(id), +i]; };
   const pickCard = k => { const [id,key] = (t.dataset[k]||"").split(":"); return [loan(id), key]; };
@@ -1737,6 +1882,24 @@ document.body.addEventListener("click", e=>{
         <span class="m num">${money(x.it.amount)}</span></div>`).join("")
       + `<div class="grand"><span class="grow eyebrow">Total · ${hit.length} payment${hit.length>1?"s":""}</span>
          <span class="num" style="font-size:19px;font-weight:600">${money(r2(hit.reduce((s,x)=>s+x.it.amount,0)))}</span></div>`);
+  }
+
+  if(t.dataset.editOwed){
+    const o = S.owed.find(x=>x.id===t.dataset.editOwed); if(!o) return;
+    const f = owedFields(o);
+    f.del = `Delete the ${money(o.amount)} ${o.who} owes you?`;
+    ask("Edit "+o.who, f, (v,d)=>{
+      if(v==="del"){ S.owed = S.owed.filter(x=>x.id!==o.id); logIt(`Removed the debt from ${o.who}`); return render(); }
+      if(v!=="ok") return;
+      o.who=d.who; o.amount=r2(d.amount); o.due=d.due||""; o.note=d.note||"";
+      Object.assign(o, splitPur(d.pur));
+      render(); });
+  }
+  // Marks it repaid without moving money, matching how wallet balances are kept by hand.
+  if(t.dataset.owedSettle){
+    const o = S.owed.find(x=>x.id===t.dataset.owedSettle); if(!o) return;
+    o.settled = true;
+    logIt(`${o.who} paid back ${money(o.amount)}`); render();
   }
 
   if(t.dataset.editWish){
@@ -2172,6 +2335,37 @@ function demo(){
   ok(isAllowanceDay()===false, "confirming clears the prompt");
   ok(walletTotal()===balBefore, "confirming does not touch any balance");
   ok(weeklyOutlook(2)[0].income===0, "a confirmed allowance is not counted as income again");
+
+  // --- money other people owe you ---
+  S = {v:DATA_V, log:[], wish:[], allowance:null,
+       accounts:[{id:"m",parent:null,name:"Main",kind:"gotyme",bal:1000,loanId:""}],
+       loans:[rebuildCard({id:"C",provider:"Card",label:"Card",ref:"",freq:"card",limit:9000,
+              sDay:9,dDay:19,items:[],purchases:[{id:"P",date:today(),label:"Thing",amount:600}]})],
+       owed:[{id:"o1",who:"Sam",amount:300,due:"",note:"",loanId:"C",purchaseId:"P",settled:false},
+             {id:"o2",who:"Alex",amount:200,due:"",note:"",loanId:"",purchaseId:"",settled:false},
+             {id:"o3",who:"Jo",amount:900,due:"",note:"",loanId:"",purchaseId:"",settled:true}]};
+  ok(owedToMe()===500, "settled debts drop out of what you are owed", owedToMe());
+  ok(owedOnCard()===300, "only the card-backed part is reported as already a liability", owedOnCard());
+  ok(receivables().length===2, "settled debts drop out of the list");
+  ok(purchaseOf(S.owed[0]).pu.label==="Thing", "a linked purchase resolves to its card and row");
+  ok(purchaseOf(S.owed[1])===null, "an unlinked debt has no purchase");
+
+  // the net position is unchanged by a receivable; only the "once settled" figure moves
+  const netNow = r2(S.accounts.reduce((x,a)=>x+a.bal,0) - S.loans.reduce((x,L)=>x+unpaid(L).reduce((t,i)=>t+i.amount,0),0));
+  ok(netNow===400, "net counts the card liability in full while it is unpaid", netNow);
+  ok(r2(netNow + owedToMe())===900, "once settled adds back exactly what you are owed");
+
+  // a purchase that no longer exists must not leave a dangling link
+  const dangling = migrate({accounts:[], log:[], wish:[], loans:[],
+    owed:[{id:"o",who:"Sam",amount:10,loanId:"GONE",purchaseId:"NOPE"}]});
+  ok(dangling.owed.length===1 && dangling.owed[0].loanId==="" && dangling.owed[0].purchaseId==="",
+     "a debt survives its linked purchase being deleted, unlinked");
+  ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:"nope"}).owed.length===0, "a wrong-typed debt list degrades to empty");
+  ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:[null,{}]}).owed.length===0, "junk debt entries are dropped");
+  ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:[{id:"x",amount:"12.5"}]}).owed[0].amount===12.5,
+     "string amounts are coerced");
+  S.owed[0].settled = true;                                  // what "Settled" does
+  ok(owedToMe()===200 && owedOnCard()===0, "settling removes it from both totals");
 
   ok(r2(0.1+0.2)===0.3, "rounding");
   S = save0; undoStack = []; suppressHistory = false;

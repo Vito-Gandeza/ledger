@@ -20,6 +20,10 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
   Partial payments carry the remainder forward.
 - **Fund the envelopes.** Given a window, it computes the per-envelope top-up needed, ordered by
   which loan bites first, and applies the transfers in one click.
+- **Owed to you.** Debts other people owe you, each optionally linked to the card purchase
+  you fronted it on. A linked debt is already counted as a liability, so the section shows
+  your position now against what it becomes once everyone pays — the headline number never
+  moves until the money is actually in a wallet.
 - **Wishlist.** Things you are saving for, each with a progress ring and a date you can
   afford it by. Progress is measured against the total across every wallet, and the rate
   comes from your allowance minus what the schedule already claims, averaged over the
