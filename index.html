@@ -1061,8 +1061,8 @@ function paint(){
   // whatever the next paint happens to be and silently swallow that checkpoint instead.
   if(document.body.dataset.state === "empty"){ save(); suppressHistory = false; return; }
 
-  const assets = r2(S.accounts.reduce((s,a)=>s+a.bal,0) + potBonus());
-  const owed   = r2(S.loans.reduce((s,L)=>s+unpaid(L).reduce((t,i)=>t+i.amount,0),0));
+  const assets = r2(S.accounts.reduce((s,a)=>s+a.bal,0) + cashOwed());
+  const owed   = r2(S.loans.reduce((s,L)=>s+unpaid(L).reduce((t,i)=>t+i.amount,0),0) - cardOwed());
   tween($("#net"), r2(assets-owed));
   $("#net").className = "net num " + (assets-owed<0?"bad":"");
   tween($("#assets"), assets);
@@ -1389,16 +1389,22 @@ function renderPlan(){
 //     Counting that same occurrence again as future income double-counts it, so each
 //     occurrence is only income while its date is newer than `lastAdded`.
 function weeklyOutlook(weeks){
-  let bal = r2(S.accounts.reduce((s,a)=>s+a.bal,0) + potBonus());
+  let bal = r2(S.accounts.reduce((s,a)=>s+a.bal,0) + cashOwed());
   const start = today(), rows = [];
   const claimedTo = S.allowance?.lastAdded || "";
+  const offsets = cardOffsets();
   for(let w=0; w<weeks; w++){
     const wStart = addDays(start, w*7), wEnd = addDays(start, w*7+6);
     const items = [];
     for(const L of S.loans) for(const it of unpaid(L))
-      if(it.due <= wEnd && (w===0 || it.due >= wStart)) items.push({L, it});
+      if(it.due <= wEnd && (w===0 || it.due >= wStart)){
+        // A statement someone else is covering costs you only the remainder.
+        const covered = offsets.get(`${L.id}|${it.due}`) || 0;
+        const due = r2(Math.max(0, it.amount - covered));
+        items.push({L, it, due, covered: r2(Math.min(covered, it.amount))});
+      }
     items.sort((a,b)=> a.it.due < b.it.due ? -1 : 1);
-    const obligations = r2(items.reduce((s,x)=>s+x.it.amount,0));
+    const obligations = r2(items.reduce((s,x)=>s+x.due,0));
 
     const pays = [];
     if(S.allowance) for(let d=0; d<7; d++){
@@ -1484,8 +1490,9 @@ function renderWeekly(){
       const late = x.it.due < today();
       return `<div class="wkl${late?" late":""}">
         <span class="d">${nice(x.it.due)}</span>
-        <span class="t"><span class="dot" style="background:${colorOf(x.L)};display:inline-block;vertical-align:middle;margin-right:7px"></span>${esc(x.L.label)}</span>
-        <span class="m num">&minus;${money(x.it.amount)}</span>
+        <span class="t"><span class="dot" style="background:${colorOf(x.L)};display:inline-block;vertical-align:middle;margin-right:7px"></span>${esc(x.L.label)}${
+          x.covered>0?` <span class="ok" style="font-size:13px">&minus;${money(x.covered)} covered</span>`:""}</span>
+        <span class="m num">&minus;${money(x.due)}</span>
       </div>`;
     }).join("");
 
@@ -1534,7 +1541,26 @@ const receivables = () => S.owed.filter(o => !o.settled);
 // is computed as if these debts had been paid. Rates are untouched: being owed money is a
 // one-off, not income that arrives every week.
 const assumePaid = () => !!S.assumePaid && owedToMeRaw() > 0;
-const potBonus = () => assumePaid() ? owedToMeRaw() : 0;
+// Two kinds of debt owed to you, and only one of them ever becomes spendable money.
+// Cash someone owes you is yours the moment they hand it over. Something you fronted on a
+// card is a pass-through: they pay you, you pay the card, and it was never your money —
+// so it is netted out of BOTH sides rather than inflating what you hold.
+const cashOwed = () => assumePaid() ? r2(owedToMeRaw() - owedOnCard()) : 0;
+const cardOwed = () => assumePaid() ? owedOnCard() : 0;
+// Which statement each fronted purchase belongs to, so it can be cancelled against the
+// exact payment it will cover instead of being averaged across the schedule.
+function cardOffsets(){
+  const out = new Map();
+  if(!assumePaid()) return out;
+  for(const o of receivables()){
+    const link = purchaseOf(o);
+    if(!link) continue;
+    const due = cycleFor(link.pu.date, link.L.sDay, link.L.dDay).due;
+    const key = `${link.L.id}|${due}`;
+    out.set(key, r2((out.get(key) || 0) + owedAmount(o)));
+  }
+  return out;
+}
 const owedToMeRaw = () => r2(receivables().reduce((s,o) => s + owedAmount(o), 0));
 const owedToMe = owedToMeRaw;
 // The part you fronted on a card: it sits in `owed` as a liability AND is coming back to
@@ -1565,12 +1591,29 @@ function savingRate(){
 }
 // Progress is measured against everything you actually hold, across every wallet — there
 // is no separate pot that has to be kept in step with reality.
-const walletTotal = () => r2(S.accounts.reduce((s,a)=>s+a.bal, 0) + potBonus());
+const walletTotal = () => r2(S.accounts.reduce((s,a)=>s+a.bal, 0) + cashOwed());
+// Walk the projection week by week and return the first week the money is actually there,
+// rather than dividing the gap by an average. Obligations are lumpy — a fortnightly
+// instalment and a monthly statement land unevenly — so an average assumes you save the
+// worst week's surplus every week and pushes the date out well past reality.
+// Past the end of the projection there is nothing left to simulate, so the flat rate is
+// used to extrapolate; that is the one place an average is the right tool.
+function weeksToAfford(gap, rate){
+  if(gap <= 0) return 0;
+  const rows = weeklyOutlook(WK_WEEKS).slice(1);
+  let run = 0;
+  for(let i = 0; i < rows.length; i++){
+    run = r2(run + rows[i].income - rows[i].obligations);
+    if(run >= gap) return i + 1;
+  }
+  if(!(rate > 0)) return null;
+  return rows.length + Math.ceil((gap - run) / rate);
+}
 function wishProgress(w, rate, pot){
   const saved = pot === undefined ? walletTotal() : r2(pot);
   const cost  = r2(w.cost);
   const left  = r2(Math.max(0, cost - saved));
-  const weeks = left <= 0 ? 0 : (rate > 0 ? Math.ceil(left / rate) : null);
+  const weeks = weeksToAfford(left, rate);
   return { saved, cost, left,
            pct: cost > 0 ? Math.min(100, Math.max(0, saved / cost * 100)) : 100,
            when: (weeks === null || weeks === 0) ? null : addDays(today(), weeks * 7),
@@ -2455,8 +2498,11 @@ function demo(){
   ok(Math.round(wishProgress(w1,1000).pct)===25, "progress is the wallet total over cost");
   ok(wishProgress({...w1,cost:1000},1000).weeks===0, "an affordable wish needs no more weeks");
   ok(wishProgress({...w1,cost:800},1000).left===0, "already affordable never reports a negative gap");
+  const keepAllowance = S.allowance;
+  S.allowance = null;                       // no income at all: nothing to simulate either
   ok(wishProgress(w1,0).weeks===null, "no surplus means no date rather than Infinity");
   ok(wishProgress(w1,-50).weeks===null, "a negative surplus also reports no date");
+  S.allowance = keepAllowance;
   ok(wishProgress({...w1,cost:0},1000).pct===100, "a free wish is complete, not NaN");
   // the rate must ignore week 0, which carries the overdue backlog
   S.loans = [{id:"L",provider:"x",label:"Old",ref:"",freq:"week",
@@ -2511,6 +2557,44 @@ function demo(){
   S.owed[0].settled = true;
   ok(owedToMe()===350 && owedOnCard()===0, "settling removes it from both totals");
 
+  // --- lumpy obligations: the date is walked, not divided ---
+  // 1000 a week clear, with one 900 instalment landing in week six. Five weeks of saving
+  // really does reach 5000, because nothing has been deducted yet. An average smears that
+  // 900 across every week (871.43 a week) and says six.
+  S = {v:DATA_V, log:[], wish:[], people:[], owed:[], assumePaid:false,
+       allowance:{weekday:new Date().getDay(), amount:1000, lastAdded:today()},
+       accounts:[{id:"m",parent:null,name:"Main",kind:"gotyme",bal:0,loanId:""}],
+       loans:[{id:"L",provider:"x",label:"Lump",ref:"",freq:"week",
+               items:[{due:addDays(today(),45),amount:900,paid:false}]}]};
+  ok(weeksToAfford(4500, savingRate())===5, "the gap closes the week the money is there", weeksToAfford(4500, savingRate()));
+  ok(Math.ceil(4500/savingRate())===6, "...which an average would have called six", Math.ceil(4500/savingRate()));
+  ok(weeksToAfford(0, 1000)===0, "nothing to save means no wait");
+  ok(weeksToAfford(-5, 1000)===0, "an overshoot is not a negative wait");
+  // beyond the projection the flat rate extrapolates, and without one there is no date
+  ok(weeksToAfford(999999, 1000) > WK_WEEKS, "a gap past the projection extrapolates", weeksToAfford(999999,1000));
+  ok(weeksToAfford(999999, 0)===null, "no rate past the projection means no date");
+
+  // --- a debt you fronted on a card cancels against the statement it will pay ---
+  S = {v:DATA_V, log:[], wish:[], allowance:null, assumePaid:true,
+       accounts:[{id:"m",parent:null,name:"Main",kind:"gotyme",bal:5000,loanId:""}],
+       loans:[rebuildCard({id:"C",provider:"Card",label:"Card",ref:"",freq:"card",limit:9000,
+              sDay:9,dDay:19,items:[],purchases:[{id:"P",date:today(),label:"Thing",amount:600}]})],
+       people:[{id:"s",name:"Sam",brand:""},{id:"a",name:"Alex",brand:""}],
+       owed:[{id:"o1",personId:"s",amount:0,note:"",loanId:"C",purchaseId:"P",settled:false},
+             {id:"o2",personId:"a",amount:400,note:"Cash",loanId:"",purchaseId:"",settled:false}]};
+  ok(cashOwed()===400 && cardOwed()===600, "cash and card-backed debts are separated", [cashOwed(), cardOwed()]);
+  ok(walletTotal()===5400, "only the cash part is spendable", walletTotal());
+  const stmtDue = cycleFor(today(), 9, 19).due;
+  ok(cardOffsets().get("C|"+stmtDue)===600, "the offset lands on the statement the purchase bills to");
+  const covRows = weeklyOutlook(WK_WEEKS);
+  const cardRow = covRows.flatMap(r=>r.items).find(x=>x.L.id==="C");
+  ok(cardRow.covered===600 && cardRow.due===0, "the statement costs nothing once it is covered", cardRow);
+  ok(covRows.every(r=>r.bal>=5400), "the projection never dips for money someone else is repaying",
+     covRows.map(r=>r.bal));
+  S.assumePaid = false;
+  ok(walletTotal()===5000 && cardOffsets().size===0, "with the mode off nothing is netted out");
+  ok(weeklyOutlook(WK_WEEKS).some(r=>r.bal<5000), "...and the statement shows as a real cost again");
+
   // --- "assume settled" moves every stock of money, and nothing else ---
   S = {v:DATA_V, log:[], allowance:{weekday:new Date().getDay(), amount:1000, lastAdded:today()},
        accounts:[{id:"m",parent:null,name:"Main",kind:"gotyme",bal:1000,loanId:""}],
@@ -2518,11 +2602,11 @@ function demo(){
        owed:[{id:"o",personId:"s",amount:500,note:"",loanId:"",purchaseId:"",settled:false}],
        assumePaid:false};
   const offPot = walletTotal(), offWeek = weeklyOutlook(2)[0].open, offRate = savingRate();
-  ok(assumePaid()===false && potBonus()===0, "the mode is off by default");
+  ok(assumePaid()===false && cashOwed()===0, "the mode is off by default");
   ok(offPot===1000, "off, the pot is only what is in the wallets", offPot);
 
   S.assumePaid = true;
-  ok(assumePaid()===true && potBonus()===500, "on, the bonus is everything outstanding");
+  ok(assumePaid()===true && cashOwed()===500 && cardOwed()===0, "on, a cash debt is spendable and nothing is card-backed");
   ok(walletTotal()===1500, "on, the wishlist pot includes what you are owed", walletTotal());
   ok(weeklyOutlook(2)[0].open===r2(offWeek+500), "on, the weekly projection opens 500 higher");
   ok(weeklyOutlook(2)[0].bal===r2(weeklyOutlook(2)[0].open + weeklyOutlook(2)[0].income), "the projection still balances");
@@ -2540,7 +2624,7 @@ function demo(){
   const predicted = walletTotal();
   S.assumePaid = false; S.owed[0].settled = true; S.accounts[0].bal = r2(S.accounts[0].bal + 500);
   ok(walletTotal()===predicted, "actually being paid matches what the mode projected", walletTotal());
-  ok(owedToMe()===0 && potBonus()===0, "a settled debt stops being counted either way");
+  ok(owedToMe()===0 && cashOwed()===0, "a settled debt stops being counted either way");
   S.owed[0].settled = false; S.accounts[0].bal = 1000; S.assumePaid = false;
   ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:[],people:[]}).assumePaid===false, "the mode defaults off on migration");
   ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:[],people:[],assumePaid:"yes"}).assumePaid===true, "the mode is coerced to a boolean");

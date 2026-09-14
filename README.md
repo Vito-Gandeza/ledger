@@ -26,16 +26,19 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
   any edit to it. Because a card-backed debt is already counted as a liability, the section
   shows your position now against what it becomes once everyone pays — the headline number
   never moves until the money is actually in a wallet.
-- **Assume settled.** A switch in the header recomputes every stock of money in the app — net
-  position, assets, the weekly projection's opening balance, the pot a wish is measured
-  against — as if the debts owed to you had been paid. Off by default, because a figure
-  counting money you have not been given yet is a figure that lies. Rates are never touched:
-  a repayment is a one-off, not income that arrives every week.
+- **Assume settled.** A switch in the header recomputes every stock of money in the app as if
+  the debts owed to you had been paid. Cash someone owes you becomes spendable; something you
+  fronted on a card does not, because that repayment goes straight back out to the card — it
+  is cancelled against the exact statement it will cover, so the projection neither inflates
+  beforehand nor dips on the due date. Off by default, because a figure counting money you
+  have not been given yet is a figure that lies. Rates are never touched: a repayment is a
+  one-off, not income that arrives every week.
 - **Wishlist.** Things you are saving for, each with a progress ring and a date you can
-  afford it by. Progress is measured against the total across every wallet, and the rate
-  comes from your allowance minus what the schedule already claims, averaged over the
-  projection and excluding the overdue backlog, which is a one-off debt rather than a
-  weekly cost.
+  afford it by. Progress is measured against the total across every wallet. The date is found
+  by walking the projection week by week until the money is actually there, rather than
+  dividing by an average — obligations are lumpy, and an average assumes you save the worst
+  week's surplus every week. The headline rate excludes the overdue backlog, which is a
+  one-off debt rather than a weekly cost.
 - **Payment timeline.** A month calendar with per-loan colour dots and per-day totals. Tap a day
   for its breakdown.
 - **Projection chart.** Eight weeks of closing balance as a column chart above the weekly rows.
