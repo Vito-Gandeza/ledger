@@ -26,6 +26,11 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
   any edit to it. Because a card-backed debt is already counted as a liability, the section
   shows your position now against what it becomes once everyone pays — the headline number
   never moves until the money is actually in a wallet.
+- **Assume settled.** A switch in the header recomputes every stock of money in the app — net
+  position, assets, the weekly projection's opening balance, the pot a wish is measured
+  against — as if the debts owed to you had been paid. Off by default, because a figure
+  counting money you have not been given yet is a figure that lies. Rates are never touched:
+  a repayment is a one-off, not income that arrives every week.
 - **Wishlist.** Things you are saving for, each with a progress ring and a date you can
   afford it by. Progress is measured against the total across every wallet, and the rate
   comes from your allowance minus what the schedule already claims, averaged over the

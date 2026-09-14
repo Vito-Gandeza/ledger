@@ -342,6 +342,23 @@ dialog h3{margin-bottom:20px}
 .fold:first-child{border-top:0}
 .foldfoot{padding:4px 16px 14px}
 
+/* A real switch, not a button: this changes what every number on the page means, so it
+   has to read as a mode that is currently on rather than an action to take. */
+.switch{display:flex; align-items:center; gap:10px; margin:-8px 0 20px; cursor:pointer;
+  font-size:13.5px; color:var(--dim); line-height:1.35}
+.switch input{position:absolute; opacity:0; width:0; height:0; min-height:0; padding:0; margin:0}
+.switch .sl{flex:none; width:40px; height:24px; border-radius:var(--pill);
+  background:color-mix(in srgb, var(--fg) 18%, transparent); position:relative;
+  transition:background .2s var(--ease)}
+.switch .sl::after{content:""; position:absolute; top:2px; left:2px; width:20px; height:20px;
+  border-radius:var(--pill); background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.35);
+  transition:transform .2s var(--ease)}
+.switch input:checked + .sl{background:var(--accent)}
+.switch input:checked + .sl::after{transform:translateX(16px)}
+.switch input:focus-visible + .sl{outline:2px solid var(--accent-hi); outline-offset:2px}
+.switch input:checked ~ .lb{color:var(--fg)}
+.switch .lb b{color:var(--fg)}
+
 /* ---------- owed to you ---------- */
 .owedviz{padding:18px 16px 16px; border-bottom:1px solid var(--line-soft)}
 .owedrow{display:flex; align-items:center; gap:12px; margin-bottom:10px}
@@ -465,6 +482,11 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
   <header class="a-hero hero">
     <div class="eyebrow">Net position</div>
     <div class="net num" id="net">&#8369;0</div>
+    <label class="switch" id="assumeWrap" hidden>
+      <input type="checkbox" id="assumeChk">
+      <span class="sl" aria-hidden="true"></span>
+      <span class="lb">Count the <b id="assumeAmt"></b> owed to you as already paid</span>
+    </label>
     <div class="split">
       <div><div class="eyebrow">Assets</div><div class="v num" id="assets">&#8369;0</div></div>
       <div><div class="eyebrow">Owed</div><div class="v num bad" id="owed">&#8369;0</div></div>
@@ -785,6 +807,7 @@ function migrate(s){
         : [];
     }
   }
+  s.assumePaid = !!s.assumePaid;
   s.allowance = normAllowance(s.allowance);
   s.v = DATA_V;
   return s;
@@ -1038,7 +1061,7 @@ function paint(){
   // whatever the next paint happens to be and silently swallow that checkpoint instead.
   if(document.body.dataset.state === "empty"){ save(); suppressHistory = false; return; }
 
-  const assets = r2(S.accounts.reduce((s,a)=>s+a.bal,0));
+  const assets = r2(S.accounts.reduce((s,a)=>s+a.bal,0) + potBonus());
   const owed   = r2(S.loans.reduce((s,L)=>s+unpaid(L).reduce((t,i)=>t+i.amount,0),0));
   tween($("#net"), r2(assets-owed));
   $("#net").className = "net num " + (assets-owed<0?"bad":"");
@@ -1059,9 +1082,14 @@ function paint(){
   // it sits beside it as the figure that number becomes once people pay.
   const back = owedToMe();
   $("#owedMeWrap").hidden = back <= 0;
+  $("#assumeWrap").hidden = back <= 0;
+  $("#assumeChk").checked = !!S.assumePaid;
   if(back > 0){
+    $("#assumeAmt").textContent = money(back);
     tween($("#owedMe"), back);
-    $("#owedMeNote").textContent = `net ${money(r2(assets - owed + back))} once settled`;
+    $("#owedMeNote").textContent = assumePaid()
+      ? "already counted in the figures above"
+      : `net ${money(r2(assets - owed + back))} once settled`;
   }
 
   const last = S.loans.flatMap(unpaid).map(i=>i.due).sort().pop();
@@ -1361,7 +1389,7 @@ function renderPlan(){
 //     Counting that same occurrence again as future income double-counts it, so each
 //     occurrence is only income while its date is newer than `lastAdded`.
 function weeklyOutlook(weeks){
-  let bal = r2(S.accounts.reduce((s,a)=>s+a.bal,0));
+  let bal = r2(S.accounts.reduce((s,a)=>s+a.bal,0) + potBonus());
   const start = today(), rows = [];
   const claimedTo = S.allowance?.lastAdded || "";
   for(let w=0; w<weeks; w++){
@@ -1427,11 +1455,12 @@ function renderWeekly(){
   const rows = weeklyOutlook(WK_WEEKS);
 
   const note = $("#wkNote");
-  if(note) note.innerHTML = !S.allowance
+  const flag = assumePaid() ? ` · <span class="pill due">incl. ${money(owedToMe())} owed to you</span>` : "";
+  if(note) note.innerHTML = (!S.allowance
     ? `<span class="dim">No allowance scheduled — income is assumed to be zero</span>`
     : allowanceClaimed()
       ? `${money(S.allowance.amount)} every ${WEEKDAYS[S.allowance.weekday]} · <span class="ok">this week claimed</span>`
-      : `${money(S.allowance.amount)} every ${WEEKDAYS[S.allowance.weekday]} · <span class="warn">this week not claimed yet</span>`;
+      : `${money(S.allowance.amount)} every ${WEEKDAYS[S.allowance.weekday]} · <span class="warn">this week not claimed yet</span>`) + flag;
 
   box.innerHTML = weeklyChart(rows) + rows.map((r,i)=>{
     const label = i===0 ? "This week" : i===1 ? "Next week" : `In ${i} weeks`;
@@ -1499,7 +1528,15 @@ const owedAmount = o => { const l = purchaseOf(o); return l ? r2(l.pu.amount) : 
 const owedLabel  = o => { const l = purchaseOf(o); return l ? l.pu.label : (o.note || ""); };
 
 const receivables = () => S.owed.filter(o => !o.settled);
-const owedToMe = () => r2(receivables().reduce((s,o) => s + owedAmount(o), 0));
+// "Assume settled" mode. Off by default, because a figure that counts money you have not
+// been given yet is a figure that lies. On, every stock of money in the app — the net
+// position, the weekly projection's opening balance, the pot a wish is measured against —
+// is computed as if these debts had been paid. Rates are untouched: being owed money is a
+// one-off, not income that arrives every week.
+const assumePaid = () => !!S.assumePaid && owedToMeRaw() > 0;
+const potBonus = () => assumePaid() ? owedToMeRaw() : 0;
+const owedToMeRaw = () => r2(receivables().reduce((s,o) => s + owedAmount(o), 0));
+const owedToMe = owedToMeRaw;
 // The part you fronted on a card: it sits in `owed` as a liability AND is coming back to
 // you, which is what makes the headline number read worse than reality.
 const owedOnCard = () => r2(receivables().filter(o => purchaseOf(o)).reduce((s,o) => s + owedAmount(o), 0));
@@ -1528,7 +1565,7 @@ function savingRate(){
 }
 // Progress is measured against everything you actually hold, across every wallet — there
 // is no separate pot that has to be kept in step with reality.
-const walletTotal = () => r2(S.accounts.reduce((s,a)=>s+a.bal, 0));
+const walletTotal = () => r2(S.accounts.reduce((s,a)=>s+a.bal, 0) + potBonus());
 function wishProgress(w, rate, pot){
   const saved = pot === undefined ? walletTotal() : r2(pot);
   const cost  = r2(w.cost);
@@ -1599,9 +1636,10 @@ function renderOwed(){
 function renderWish(){
   const rate = savingRate(), pot = walletTotal();
   const note = $("#wishNote");
-  if(note) note.innerHTML = rate > 0
+  if(note) note.innerHTML = (rate > 0
     ? `${money(pot)} saved · about <b>${money(rate)}</b> a week`
-    : `${money(pot)} saved · <span class="warn">nothing spare each week right now</span>`;
+    : `${money(pot)} saved · <span class="warn">nothing spare each week right now</span>`)
+    + (assumePaid() ? ` · <span class="pill due">incl. ${money(owedToMe())} owed to you</span>` : "");
 
   if(!S.wish.length){
     $("#wish").innerHTML = `<div class="empty">Nothing on the list yet. Add something you are saving for and this will tell you when you can afford it.</div>`;
@@ -1790,6 +1828,7 @@ $("#wImport").onclick = ()=> $("#importFile").click();
 $("#wSync").onclick = setupSync;
 $("#syncBtn").onclick = setupSync;
 $("#undoBtn").onclick = undo;
+$("#assumeChk").onchange = e => { S.assumePaid = e.target.checked; render(); };
 
 // ---------- actions ----------
 $("#addAcc").onclick = ()=> addSection(mainAcc()?.id);
@@ -2471,6 +2510,40 @@ function demo(){
   ok(r2(netNow + owedToMe()) - netNow === 1100, "once settled adds back exactly what you are owed");
   S.owed[0].settled = true;
   ok(owedToMe()===350 && owedOnCard()===0, "settling removes it from both totals");
+
+  // --- "assume settled" moves every stock of money, and nothing else ---
+  S = {v:DATA_V, log:[], allowance:{weekday:new Date().getDay(), amount:1000, lastAdded:today()},
+       accounts:[{id:"m",parent:null,name:"Main",kind:"gotyme",bal:1000,loanId:""}],
+       loans:[], people:[{id:"s",name:"Sam",brand:""}], wish:[{id:"w",name:"Thing",cost:2500,brand:"",logo:""}],
+       owed:[{id:"o",personId:"s",amount:500,note:"",loanId:"",purchaseId:"",settled:false}],
+       assumePaid:false};
+  const offPot = walletTotal(), offWeek = weeklyOutlook(2)[0].open, offRate = savingRate();
+  ok(assumePaid()===false && potBonus()===0, "the mode is off by default");
+  ok(offPot===1000, "off, the pot is only what is in the wallets", offPot);
+
+  S.assumePaid = true;
+  ok(assumePaid()===true && potBonus()===500, "on, the bonus is everything outstanding");
+  ok(walletTotal()===1500, "on, the wishlist pot includes what you are owed", walletTotal());
+  ok(weeklyOutlook(2)[0].open===r2(offWeek+500), "on, the weekly projection opens 500 higher");
+  ok(weeklyOutlook(2)[0].bal===r2(weeklyOutlook(2)[0].open + weeklyOutlook(2)[0].income), "the projection still balances");
+  ok(savingRate()===offRate, "a one-off repayment never changes the weekly rate", savingRate());
+  ok(wishProgress(S.wish[0], savingRate()).saved===1500, "a wish is measured against the boosted pot");
+  // 2500 to find, 1000 a week: 1500 still needed with the debt counted, 2500 without —
+  // two weeks becomes one, which is the whole point of the mode.
+  ok(wishProgress(S.wish[0], savingRate()).left === 1000, "the gap shrinks by what you are owed");
+  ok(wishProgress(S.wish[0], savingRate()).weeks === 1
+     && wishProgress(S.wish[0], savingRate(), offPot).weeks === 2,
+     "assuming payment brings the date forward",
+     [wishProgress(S.wish[0], savingRate()).weeks, wishProgress(S.wish[0], savingRate(), offPot).weeks]);
+
+  // settling for real must land in exactly the same place the assumption predicted
+  const predicted = walletTotal();
+  S.assumePaid = false; S.owed[0].settled = true; S.accounts[0].bal = r2(S.accounts[0].bal + 500);
+  ok(walletTotal()===predicted, "actually being paid matches what the mode projected", walletTotal());
+  ok(owedToMe()===0 && potBonus()===0, "a settled debt stops being counted either way");
+  S.owed[0].settled = false; S.accounts[0].bal = 1000; S.assumePaid = false;
+  ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:[],people:[]}).assumePaid===false, "the mode defaults off on migration");
+  ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:[],people:[],assumePaid:"yes"}).assumePaid===true, "the mode is coerced to a boolean");
 
   // --- migration: names become profiles, dangling links are cleaned up ---
   const up = migrate({accounts:[], loans:[], log:[], wish:[],
