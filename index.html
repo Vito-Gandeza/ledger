@@ -24,8 +24,8 @@
 :root{
   --bg:#f2f2f5; --fg:#1d1d1f; --fg2:#424245; --dim:#6e6e73;
   --line:#d8d8dd; --line-soft:#ebebef; --card:#ffffff; --sunk:#f6f6f8;
-  --accent:#3b5bdb; --accent-hi:#4c6ef5; --on-accent:#ffffff;
-  --good:#0f7a4d; --warn:#9a5a0c; --bad:#c9334a;
+  --accent:#2f6fd0; --accent-hi:#3d7fe0; --on-accent:#ffffff;
+  --good:#127a52; --warn:#96590f; --bad:#c23b50;
   --r:18px; --r-md:12px; --r-sm:8px; --pill:9999px;
   --pad:clamp(16px,4.2vw,32px); --maxw:760px; --nav:52px;
   --ease:cubic-bezier(.22,1,.36,1);
@@ -33,21 +33,19 @@
   --lift-hi:0 1px 2px rgba(0,0,0,.05), 0 18px 40px -22px rgba(0,0,0,.28);
 }
 @media (prefers-color-scheme:dark){
-  /* Deep ink with a blue cast rather than pure black: surfaces can then sit ABOVE the
-     canvas instead of all collapsing into the same void, which is what read as flat. */
-  :root{ --bg:#0a0c12; --fg:#e9ecf4; --fg2:#b6becd; --dim:#7b8598;
-         --line:#252c3a; --line-soft:#1a202b; --card:#141926; --sunk:#1b2130;
-         --accent:#7d94ff; --accent-hi:#9aabff;
-         --good:#3ddc97; --warn:#ffb340; --bad:#ff6183;
-         --lift:0 0 0 1px rgba(255,255,255,.045), 0 8px 22px -12px rgba(0,0,0,.85);
-         --lift-hi:0 0 0 1px rgba(255,255,255,.07), 0 24px 50px -26px rgba(0,0,0,1),
-                   0 0 60px -30px color-mix(in srgb, var(--accent) 60%, transparent); }
+  /* Neutral graphite rather than pure black, so surfaces can sit above the canvas without
+     the page reading as a coloured field. Text stops short of pure white and the accent is
+     a desaturated sky blue — both chosen to keep luminance contrast comfortable on dark. */
+  :root{ --bg:#0d1117; --fg:#dde3ec; --fg2:#a9b2c1; --dim:#737d8c;
+         --line:#262d38; --line-soft:#1a212a; --card:#151b23; --sunk:#1b222c;
+         --accent:#7aa2f7; --accent-hi:#93b5f9; --on-accent:#0d1117;
+         --good:#5ac489; --warn:#e0a34a; --bad:#f0707f;
+         --lift:0 0 0 1px rgba(255,255,255,.04), 0 6px 18px -12px rgba(0,0,0,.7);
+         --lift-hi:0 0 0 1px rgba(255,255,255,.055), 0 18px 40px -26px rgba(0,0,0,.9); }
 }
 
 *{box-sizing:border-box; margin:0; padding:0}
 html{-webkit-text-size-adjust:100%; scroll-behavior:smooth; overflow-x:hidden; background:var(--bg)}
-body::before{content:""; position:fixed; inset:0 0 auto 0; height:420px; z-index:-1; pointer-events:none;
-  background:radial-gradient(100% 100% at 50% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 72%)}
 body{
   background:var(--bg); color:var(--fg);
   font:400 17px/1.47 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,"Segoe UI",Inter,sans-serif;
@@ -107,8 +105,6 @@ body[data-state="empty"] .topbar{display:none}
    without it the most important figure on the page had the least visual weight. */
 .hero{background:var(--card); border:1px solid var(--line); border-radius:var(--r);
   box-shadow:var(--lift-hi); padding:24px; position:relative; overflow:hidden}
-.hero::before{content:""; position:absolute; inset:0 0 auto 0; height:150px; pointer-events:none;
-  background:radial-gradient(120% 100% at 0% 0%, color-mix(in srgb,var(--accent) 12%,transparent), transparent 70%)}
 .hero > *{position:relative}
 .net{font-size:clamp(38px,10.5vw,52px); font-weight:600; line-height:1.05; letter-spacing:-.035em; margin:4px 0 20px}
 .split{display:grid; gap:16px 20px; grid-template-columns:repeat(auto-fit,minmax(138px,1fr));
@@ -170,8 +166,7 @@ button{background:none; border:0; cursor:pointer}
   transition:transform .16s var(--ease), background .16s, border-color .16s, opacity .16s}
 .btn:active{transform:scale(.95)}
 .btn:focus-visible{outline:2px solid var(--accent-hi); outline-offset:2px}
-.btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent);
-  box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 18px -12px var(--accent)}
+.btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent); box-shadow:none}
 .btn.ghost{border-color:transparent; background:none; color:var(--accent); padding:8px 10px; box-shadow:none}
 .btn.mini{padding:5px 12px; font-size:13px; min-height:30px}
 .btn.big{padding:12px 24px; font-size:17px; min-height:46px}
@@ -335,6 +330,15 @@ dialog h3{margin-bottom:20px}
 .ccstats{display:flex; gap:10px; flex-wrap:wrap; font-size:13px; opacity:.85}
 .ccstats .ccright{margin-left:auto}
 .cardmeta:not(:empty){padding:14px 20px 16px; border-bottom:1px solid var(--line-soft)}
+
+/* A plain disclosure row, used for settled statements and the activity log — history
+   should be reachable without occupying the page. */
+.foldhead{display:flex; align-items:center; gap:10px; padding:14px 16px; cursor:pointer;
+  font-size:16px; min-height:52px}
+@media (hover:hover){ .foldhead:hover{background:var(--sunk)} }
+.fold{border-top:1px solid var(--line-soft)}
+.fold:first-child{border-top:0}
+.foldfoot{padding:4px 16px 14px}
 
 /* ---------- wishlist ----------
    A ring rather than another bar: this section is about motivation, and it should not
@@ -504,8 +508,15 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
     </section>
 
     <section class="a-log">
-      <div class="shead"><h2>Activity</h2><button class="btn ghost" id="clearLog">Clear</button></div>
-      <div class="card" id="log"></div>
+      <div class="card">
+        <details class="fold">
+          <summary class="foldhead"><span class="chev">&rsaquo;</span>
+            <span class="grow"><b>Activity</b></span>
+            <span class="sub" id="logCount"></span></summary>
+          <div id="log"></div>
+          <div class="foldfoot"><button class="btn mini ghost" id="clearLog">Clear activity</button></div>
+        </details>
+      </div>
     </section>
   </div>
 
@@ -661,8 +672,8 @@ function demoData(){
      limit:8000, sDay:9, dDay:19, items:[],
      purchases:[{id:uid(), date:addDays(today(),-2), label:"Subscription", amount:1410.39}]}),
   ], log:[], allowance:{weekday:new Date().getDay(), amount:2500, lastAdded:today()}, wish:[
-    {id:uid(), name:"Mechanical keyboard", cost:4800, saved:1200, accId:"", brand:"#7d94ff", logo:""},
-    {id:uid(), name:"Weekend trip", cost:12000, saved:900, accId:"", brand:"#3ddc97", logo:""},
+    {id:uid(), name:"Mechanical keyboard", cost:4800, brand:"#7aa2f7", logo:""},
+    {id:uid(), name:"Weekend trip", cost:12000, brand:"#5ac489", logo:""},
   ]};
 }
 
@@ -989,13 +1000,15 @@ function paint(){
   if(isAllowanceDay() && incomeAcc()){
     const on = lastAllowanceDate();
     alertHtml += `<div class="alertbar ok">
-      <span class="grow">${on===today() ? "It&rsquo;s allowance day" : `Your ${WEEKDAYS[S.allowance.weekday]} allowance (${nice(on)}) has not been added`}
-        — put ${money(S.allowance.amount)} into ${esc(incomeAcc().name)}?</span>
-      <button class="btn mini primary" data-add-allowance>Add it</button></div>`;
+      <span class="grow">${on===today() ? "It&rsquo;s allowance day" : `Your ${WEEKDAYS[S.allowance.weekday]} allowance was due ${nice(on)}`}
+        — is the ${money(S.allowance.amount)} already in ${esc(incomeAcc().name)}?</span>
+      <button class="btn mini primary" data-allowance-claimed>Yes, it&rsquo;s in</button>
+      <button class="btn mini" data-allowance-add>Add it for me</button></div>`;
   }
   $("#alert").innerHTML = alertHtml;
 
   renderAccounts(); renderCards(); renderLoans(); renderPlan(); renderTimeline(); renderWeekly(); renderWish();
+  const lc = $("#logCount"); if(lc) lc.textContent = S.log.length ? `${S.log.length} entries` : "nothing yet";
   $("#log").innerHTML = S.log.map(l=>`<div class="row"><div class="grow"><div class="name">${esc(l.t)}</div>
       <div class="sub">${new Date(l.when).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</div></div></div>`
     ).join("") || `<div class="empty">Nothing logged yet.</div>`;
@@ -1100,6 +1113,7 @@ function renderCards(){
     const openDue = cycleFor(today(), L.sDay, L.dDay).due;
     const stmts = L.items.filter(i=>i.due!==openDue);
     const open = L.items.find(i=>i.due===openDue);
+    const settled = stmts.filter(i=>i.paid).sort((a,b)=> a.due<b.due?1:-1);  // newest first
     const billed = r2(stmts.filter(i=>!i.paid).reduce((s,i)=>s+i.amount,0));
     const openAmt = open ? open.amount : 0;
     // A card with no limit set would make every bar width NaN/Infinity.
@@ -1150,8 +1164,13 @@ function renderCards(){
           </div>`:""}
         </div>
       </div>
-      ${stmts.map(i=>cyc(i,false)).join("")}
       ${open ? cyc(open,true) : `<div class="empty">Nothing charged this cycle. Next statement ${niceY(cycleFor(today(),L.sDay,L.dDay).stmt)}.</div>`}
+      ${stmts.filter(i=>!i.paid).sort((a,b)=> a.due<b.due?-1:1).map(i=>cyc(i,false)).join("")}
+      ${settled.length ? `<details class="fold">
+        <summary class="foldhead"><span class="chev">&rsaquo;</span>
+          <span class="grow">${settled.length} settled statement${settled.length>1?"s":""}</span>
+          <span class="sub num">${money(r2(settled.reduce((s,i)=>s+i.amount,0)))} paid</span></summary>
+        ${settled.map(i=>cyc(i,false)).join("")}</details>` : ""}
     </div>`;
   }).join("");
 }
@@ -1403,37 +1422,39 @@ function savingRate(){
   const out    = rows.reduce((s,r)=>s+r.obligations, 0);
   return r2((income - out) / rows.length);
 }
-function wishProgress(w, rate){
-  const linked = w.accId ? acc(w.accId) : null;
-  const saved = r2(linked ? linked.bal : w.saved);
+// Progress is measured against everything you actually hold, across every wallet — there
+// is no separate pot that has to be kept in step with reality.
+const walletTotal = () => r2(S.accounts.reduce((s,a)=>s+a.bal, 0));
+function wishProgress(w, rate, pot){
+  const saved = pot === undefined ? walletTotal() : r2(pot);
   const cost  = r2(w.cost);
   const left  = r2(Math.max(0, cost - saved));
   const weeks = left <= 0 ? 0 : (rate > 0 ? Math.ceil(left / rate) : null);
-  return { linked, saved, cost, left, weeks,
+  return { saved, cost, left,
            pct: cost > 0 ? Math.min(100, Math.max(0, saved / cost * 100)) : 100,
-           when: (weeks === null || weeks === 0) ? null : addDays(today(), weeks * 7) };
+           when: (weeks === null || weeks === 0) ? null : addDays(today(), weeks * 7),
+           weeks };
 }
 
 function renderWish(){
-  const rate = savingRate();
+  const rate = savingRate(), pot = walletTotal();
   const note = $("#wishNote");
   if(note) note.innerHTML = rate > 0
-    ? `Putting aside about <b>${money(rate)}</b> a week`
-    : `<span class="warn">Nothing spare each week at the current schedule</span>`;
+    ? `${money(pot)} saved · about <b>${money(rate)}</b> a week`
+    : `${money(pot)} saved · <span class="warn">nothing spare each week right now</span>`;
 
   if(!S.wish.length){
     $("#wish").innerHTML = `<div class="empty">Nothing on the list yet. Add something you are saving for and this will tell you when you can afford it.</div>`;
     return;
   }
-  const rows = S.wish.map(w => ({w, p: wishProgress(w, rate)}));
-  // Closest to done first — the point of the list is momentum.
-  rows.sort((a,b) => b.p.pct - a.p.pct);
-  const C = 2 * Math.PI * 15.5;   // circumference of the ring below
+  const rows = S.wish.map(w => ({w, p: wishProgress(w, rate, pot)}));
+  rows.sort((a,b) => b.p.pct - a.p.pct);   // closest to done first: the list is for momentum
+  const C = 2 * Math.PI * 15.5;
 
   $("#wish").innerHTML = rows.map(({w,p}) => {
     const tint = w.brand || "var(--accent)";
     const done = p.left <= 0;
-    const when = done ? `<span class="ok">Ready to buy</span>`
+    const when = done ? `<span class="ok">You can afford this now</span>`
       : p.weeks === null ? `<span class="warn">No spare money at this rate</span>`
       : `Ready around <b>${niceY(p.when)}</b> · ${p.weeks} week${p.weeks>1?"s":""}`;
     return `<div class="wish">
@@ -1447,12 +1468,10 @@ function renderWish(){
       </span>
       <div class="grow">
         <div class="name">${w.logo?brandMark(w,""):""}${esc(w.name)}</div>
-        <div class="sub">${money(p.saved)} of ${money(p.cost)}${p.left>0?` · ${money(p.left)} to go`:""}</div>
+        <div class="sub">${money(p.cost)}${p.left>0?` · ${money(p.left)} to go`:""}</div>
         <div class="sub">${when}</div>
-        ${p.linked?`<div class="sub dim">Saving into ${esc(p.linked.name)}</div>`:""}
       </div>
       <div class="rowacts">
-        <button class="btn mini" data-wish-put="${w.id}">Put aside</button>
         <button class="iconbtn" data-edit-wish="${w.id}" aria-label="Edit">Edit</button>
       </div>
     </div>`;
@@ -1626,22 +1645,16 @@ function addSection(parentId){
     logIt(`Added section ${d.name}`); render(); });
 }
 
-const wishSections = () => kidsOf(mainAcc()?.id).filter(a=>a.loanId!=="income");
 const wishFields = w => [
   {name:"name",label:"What is it",value:w?.name ?? "",required:1},
   {name:"cost",label:"How much does it cost",type:"number",value:w?.cost ?? "",required:1},
-  {name:"accId",label:"Save into",type:"select",value:w?.accId ?? "",
-   options:[{v:"",t:"— just track a number —"},
-     ...wishSections().map(a=>({v:a.id,t:`${a.name} (${money(a.bal)})`}))]},
-  {name:"saved",label:"Already saved (ignored when a section is chosen)",type:"number",value:w?.saved ?? "0"},
-  {name:"bd",label:"Colour and logo",type:"brand",value:{brand:w?.brand, logo:w?.logo, fallback:"#3b5bdb"}},
+  {name:"bd",label:"Colour and logo",type:"brand",value:{brand:w?.brand, logo:w?.logo, fallback:"#2f6fd0"}},
 ];
 $("#addWish").onclick = ()=>{
   const f = wishFields(null);
-  f.hint = "Link it to a section under your main wallet and the progress follows that balance, so putting money aside is a real transfer rather than a number you maintain.";
+  f.hint = "Progress is measured against everything across all your wallets.";
   ask("Add to the wishlist", f, (v,d)=>{ if(v!=="ok") return;
-    S.wish.push({id:uid(), name:d.name, cost:r2(d.cost), saved:r2(d.saved),
-                 accId:d.accId||"", brand:d.bd_brand||"", logo:d.bd_logo||""});
+    S.wish.push({id:uid(), name:d.name, cost:r2(d.cost), brand:d.bd_brand||"", logo:d.bd_logo||""});
     logIt(`Added ${d.name} to the wishlist`); render(); });
 };
 
@@ -1696,7 +1709,7 @@ function reorder(id, dir){
 }
 
 document.body.addEventListener("click", e=>{
-  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-add-allowance],[data-xfer],[data-day],[data-edit-wish],[data-wish-put]");
+  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-allowance-claimed],[data-allowance-add],[data-xfer],[data-day],[data-edit-wish]");
   if(!t) return;
   const pick = k => { const [id,i] = (t.dataset[k]||"").split(":"); return [loan(id), +i]; };
   const pickCard = k => { const [id,key] = (t.dataset[k]||"").split(":"); return [loan(id), key]; };
@@ -1733,22 +1746,9 @@ document.body.addEventListener("click", e=>{
     ask("Edit "+w.name, f, (v,d)=>{
       if(v==="del"){ S.wish = S.wish.filter(x=>x.id!==w.id); logIt(`Removed ${w.name} from the wishlist`); return render(); }
       if(v!=="ok") return;
-      w.name=d.name; w.cost=r2(d.cost); w.saved=r2(d.saved);
-      w.accId=d.accId||""; w.brand=d.bd_brand||""; w.logo=d.bd_logo||"";
+      w.name=d.name; w.cost=r2(d.cost); w.brand=d.bd_brand||""; w.logo=d.bd_logo||"";
       render(); });
   }
-  if(t.dataset.wishPut){
-    const w = S.wish.find(x=>x.id===t.dataset.wishPut); if(!w) return;
-    // Linked to a real section: this is an ordinary transfer, so reuse that flow rather
-    // than keeping a second, parallel idea of where the money is.
-    if(w.accId && acc(w.accId)) return openMove(incomeAcc()?.id, w.accId);
-    ask(`Put aside for ${w.name}`,[{name:"amount",label:"Add to what you have saved",type:"number",required:1}],
-      (v,d)=>{ if(v!=="ok") return;
-        const amt = r2(d.amount); if(!(amt > 0)) return;
-        w.saved = r2(w.saved + amt);
-        logIt(`Put aside ${money(amt)} for ${w.name}`); render(); });
-  }
-
   if(t.dataset.addKid) addSection(t.dataset.addKid);
   if(t.dataset.mv){ const [id,dir] = t.dataset.mv.split(":"); reorder(id, +dir); }
 
@@ -1853,7 +1853,13 @@ document.body.addEventListener("click", e=>{
       }
       render(); });
   }
-  if(t.hasAttribute("data-add-allowance")){
+  // Marks the week handled without touching the balance — the usual case, because the
+  // wallet figure is edited by hand when the money actually lands.
+  if(t.hasAttribute("data-allowance-claimed") && S.allowance){
+    S.allowance.lastAdded = today();
+    logIt(`Marked this week's allowance as received`); render();
+  }
+  if(t.hasAttribute("data-allowance-add")){
     const a = incomeAcc();
     if(a && S.allowance){
       a.bal = r2(a.bal + S.allowance.amount); S.allowance.lastAdded = today();
@@ -1912,10 +1918,10 @@ document.body.addEventListener("click", e=>{
 
 // fromId preselects the source — every wallet/section gets its own transfer button that
 // calls this instead of just the one global "Move".
-function openMove(fromId, toId){
+function openMove(fromId){
   ask("Move money",[
     {name:"from",label:"From",type:"select",options:allAccOptions(),value:fromId||incomeAcc()?.id},
-    {name:"to",label:"To",type:"select",options:allAccOptions(),value:toId||mainAcc()?.id},
+    {name:"to",label:"To",type:"select",options:allAccOptions(),value:mainAcc()?.id},
     {name:"amount",label:"Amount",type:"number",required:1}],
     (v,d)=>{ if(v!=="ok"||d.from===d.to) return;
       const a=acc(d.from), b=acc(d.to), amt=r2(d.amount);
@@ -2135,33 +2141,37 @@ function demo(){
 
   // --- wishlist: rate, progress and the edges that make it lie ---
   S = {v:DATA_V, log:[], wish:[], allowance:{weekday:new Date().getDay(), amount:1000, lastAdded:today()},
-       accounts:[{id:"m",parent:null,name:"Main",kind:"gotyme",bal:0,loanId:""},
+       accounts:[{id:"m",parent:null,name:"Main",kind:"gotyme",bal:750,loanId:""},
                  {id:"p",parent:"m",name:"Pot",kind:"gotyme",bal:250,loanId:""}],
        loans:[]};
   ok(savingRate()===1000, "with no obligations the rate is the whole allowance", savingRate());
-  const w1 = {id:"w1", name:"Thing", cost:1000, saved:250, accId:"", brand:"", logo:""};
-  ok(wishProgress(w1,1000).left===750 && wishProgress(w1,1000).weeks===1, "one week of surplus closes a 750 gap");
-  ok(Math.round(wishProgress(w1,1000).pct)===25, "progress is saved over cost");
-  ok(wishProgress({...w1,saved:1000},1000).weeks===0, "a funded wish needs no more weeks");
-  ok(wishProgress({...w1,saved:1200},1000).left===0, "overshooting never reports a negative gap");
+  ok(walletTotal()===1000, "progress counts every wallet, parent and section alike", walletTotal());
+  const w1 = {id:"w1", name:"Thing", cost:4000, brand:"", logo:""};
+  ok(wishProgress(w1,1000).saved===1000, "a wish is measured against the wallet total");
+  ok(wishProgress(w1,1000).left===3000 && wishProgress(w1,1000).weeks===3, "three weeks of surplus closes a 3000 gap");
+  ok(Math.round(wishProgress(w1,1000).pct)===25, "progress is the wallet total over cost");
+  ok(wishProgress({...w1,cost:1000},1000).weeks===0, "an affordable wish needs no more weeks");
+  ok(wishProgress({...w1,cost:800},1000).left===0, "already affordable never reports a negative gap");
   ok(wishProgress(w1,0).weeks===null, "no surplus means no date rather than Infinity");
   ok(wishProgress(w1,-50).weeks===null, "a negative surplus also reports no date");
   ok(wishProgress({...w1,cost:0},1000).pct===100, "a free wish is complete, not NaN");
-  // a linked wish reads the section's real balance, not its own number
-  ok(wishProgress({...w1, accId:"p", saved:0},1000).saved===250, "linked progress follows the section balance");
-  ok(wishProgress({...w1, accId:"p", saved:0},1000).linked.name==="Pot", "the linked section is reported");
   // the rate must ignore week 0, which carries the overdue backlog
   S.loans = [{id:"L",provider:"x",label:"Old",ref:"",freq:"week",
               items:[{due:addDays(today(),-60),amount:5000,paid:false}]}];
   ok(savingRate()===1000, "an overdue backlog does not drag the weekly rate to zero", savingRate());
   ok(weeklyOutlook(2)[0].obligations===5000, "...but the backlog is still shown in week 0");
-  // a wish pointing at a deleted section falls back to its own number instead of vanishing
-  const orphanWish = migrate({accounts:[], loans:[], log:[],
-    wish:[{id:"w",name:"X",cost:10,saved:3,accId:"GONE"}]});
-  ok(orphanWish.wish.length===1 && orphanWish.wish[0].accId==="", "a wish survives its section being deleted");
   ok(migrate({accounts:[],loans:[],log:[],wish:"nope"}).wish.length===0, "a wrong-typed wishlist degrades to empty");
   ok(migrate({accounts:[],loans:[],log:[],wish:[null,{}]}).wish.length===0, "junk wish entries are dropped");
   ok(ord(1)==="1st" && ord(11)==="11th" && ord(22)==="22nd" && ord(13)==="13th", "ordinals handle the teens");
+
+  // --- confirming the allowance records the week without moving money ---
+  S.allowance = {weekday:new Date().getDay(), amount:1000, lastAdded:""};
+  const balBefore = walletTotal();
+  ok(isAllowanceDay()===true, "an unclaimed allowance prompts");
+  S.allowance.lastAdded = today();                       // what "Yes, it's in" does
+  ok(isAllowanceDay()===false, "confirming clears the prompt");
+  ok(walletTotal()===balBefore, "confirming does not touch any balance");
+  ok(weeklyOutlook(2)[0].income===0, "a confirmed allowance is not counted as income again");
 
   ok(r2(0.1+0.2)===0.3, "rounding");
   S = save0; undoStack = []; suppressHistory = false;
