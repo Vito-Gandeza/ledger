@@ -7,224 +7,308 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ledger">
-<meta name="theme-color" content="#0b0b0c" media="(prefers-color-scheme:dark)">
-<meta name="theme-color" content="#faf9f7" media="(prefers-color-scheme:light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme:dark)">
+<meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme:light)">
 <meta name="description" content="A private envelope-budgeting ledger for instalment loans and credit cards. Your data never leaves your device.">
 <title>Ledger</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <style>
+/* ============================================================
+   Design language: one accent colour, hairline borders, no card shadows.
+   Elevation comes from a surface change or a frosted blur, never a drop shadow.
+   Variable NAMES are unchanged from the previous theme on purpose — a few of them
+   are referenced from inline styles inside the render templates below.
+   ============================================================ */
 :root{
-  --bg:#faf9f7; --fg:#17161a; --dim:#7a7770; --line:#e4e1db; --card:#fff; --sunk:#f4f2ee;
-  --accent:#1f6feb; --good:#0a7d55; --warn:#b0510a; --bad:#b3261e;
-  --r:16px; --pad:clamp(16px,4vw,30px);
+  --bg:#f5f5f7; --fg:#1d1d1f; --fg2:#424245; --dim:#6e6e73;
+  --line:#d2d2d7; --line-soft:#e8e8ed; --card:#ffffff; --sunk:#f0f0f2;
+  --accent:#0066cc; --accent-hi:#0071e3; --on-accent:#ffffff;
+  --good:#117a48; --warn:#9a530c; --bad:#c9332b;
+  --r:18px; --r-md:12px; --r-sm:8px; --pill:9999px;
+  --pad:clamp(16px,4.2vw,32px); --maxw:760px; --nav:52px;
   --ease:cubic-bezier(.22,1,.36,1);
-  --shadow:0 1px 2px rgba(0,0,0,.04), 0 8px 24px -16px rgba(0,0,0,.18);
 }
 @media (prefers-color-scheme:dark){
-  :root{ --bg:#0b0b0c; --fg:#eceae6; --dim:#8b8880; --line:#232326; --card:#121214; --sunk:#0f0f11;
-         --accent:#5b9dff; --good:#3ecf9a; --warn:#e0a44f; --bad:#ff6b60;
-         --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px -18px rgba(0,0,0,.9); }
+  :root{ --bg:#000000; --fg:#f5f5f7; --fg2:#c7c7cc; --dim:#98989d;
+         --line:#38383a; --line-soft:#2c2c2e; --card:#1c1c1e; --sunk:#2c2c2e;
+         --accent:#2997ff; --accent-hi:#409cff;
+         --good:#30d158; --warn:#ff9f0a; --bad:#ff453a; }
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html{-webkit-text-size-adjust:100%; scroll-behavior:smooth; overflow-x:hidden}
+
+*{box-sizing:border-box; margin:0; padding:0}
+html{-webkit-text-size-adjust:100%; scroll-behavior:smooth; overflow-x:hidden; background:var(--bg)}
 body{
-  background:var(--bg); color:var(--fg); font:400 16px/1.5 ui-sans-serif,-apple-system,"SF Pro Text",Inter,system-ui,sans-serif;
-  font-variant-numeric:tabular-nums; padding:0 var(--pad) 80px;
-  padding-top:calc(env(safe-area-inset-top) + 22px);
-  max-width:760px; margin:0 auto; -webkit-tap-highlight-color:transparent;
-  transition:max-width .3s var(--ease);
+  background:var(--bg); color:var(--fg);
+  font:400 17px/1.47 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,"Segoe UI",Inter,sans-serif;
+  letter-spacing:-.374px; font-variant-numeric:tabular-nums;
+  -webkit-tap-highlight-color:transparent; -webkit-font-smoothing:antialiased;
 }
-h2{font-weight:500; letter-spacing:-.02em; font-size:19px}
-h3{font-weight:500; font-size:18px}
-.eyebrow{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim)}
-.num{font-family:ui-monospace,"SF Mono",Menlo,monospace; font-variant-numeric:tabular-nums}
-.grow{flex:1; min-width:0}
-.sub{font-size:12px; color:var(--dim)}
+.wrap{max-width:var(--maxw); margin:0 auto;
+  padding:22px var(--pad) calc(env(safe-area-inset-bottom) + 72px);
+  transition:max-width .3s var(--ease)}
+
+h2{font-size:21px; font-weight:600; line-height:1.19; letter-spacing:-.01em}
+h3{font-size:21px; font-weight:600; line-height:1.24; letter-spacing:-.02em}
+b,strong{font-weight:600}
+/* Small labels are sentence case and quiet — no uppercase tracking anywhere. */
+.eyebrow{font-size:13px; font-weight:600; letter-spacing:-.08px; color:var(--dim)}
+.num{font-variant-numeric:tabular-nums; letter-spacing:-.02em}
+.grow{flex:1 1 120px; min-width:0}
+.sub{font-size:13.5px; line-height:1.38; color:var(--dim); letter-spacing:-.224px}
+.ok{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)} .dim{color:var(--dim)}
+
+/* ---------- frosted top bar ---------- */
+.topbar{position:sticky; top:0; z-index:40; width:100%;
+  padding-top:env(safe-area-inset-top);
+  background:color-mix(in srgb, var(--bg) 78%, transparent);
+  -webkit-backdrop-filter:saturate(180%) blur(20px); backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:1px solid transparent; transition:border-color .25s var(--ease)}
+body.scrolled .topbar{border-bottom-color:var(--line)}
+.topbar .inner{max-width:var(--maxw); margin:0 auto; min-height:var(--nav);
+  padding:7px var(--pad); display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.topbar .mk{font-weight:600; font-size:19px; letter-spacing:-.02em; margin-right:auto}
+body[data-state="empty"] .topbar{display:none}
 
 /* ---------- dashboard grid ---------- */
-/* grid-area names below only mean something once grid-template-areas defines where they
-   are — without that, Chromium collapses every named item into the same implicit cell
-   instead of falling back to normal auto-flow. That was the real cause of every section
-   rendering stacked on top of each other on mobile: this base rule was missing, so only
-   the two wider @media breakpoints below ever defined the areas at all. */
-.dash{display:grid; gap:30px 26px; align-items:start; grid-template-columns:minmax(0,1fr);
-  grid-template-areas:"hero" "wallets" "cards" "plan" "timeline" "weekly" "loans" "log" "foot";}
+/* grid-area names only mean something once grid-template-areas says where they are.
+   Without a BASE map, Chromium collapses every named child into one implicit cell —
+   that was the real cause of every section stacking on top of the others on mobile. */
+.dash{display:grid; gap:34px 26px; align-items:start; grid-template-columns:minmax(0,1fr);
+  grid-template-areas:"hero" "plan" "weekly" "wallets" "cards" "timeline" "loans" "log" "foot";}
 .dash > *{min-width:0}
 .a-hero{grid-area:hero} .a-plan{grid-area:plan} .a-timeline{grid-area:timeline} .a-weekly{grid-area:weekly}
 .a-wallets{grid-area:wallets} .a-cards{grid-area:cards} .a-loans{grid-area:loans}
 .a-log{grid-area:log} .a-foot{grid-area:foot}
 @media (min-width:1080px){
-  body{max-width:1240px}
+  :root{--maxw:1240px}
   .dash{grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);
     grid-template-areas:"hero hero" "plan timeline" "weekly timeline" "wallets timeline" "cards loans" "log log" "foot foot";}
 }
 @media (min-width:1500px){
-  body{max-width:1580px}
+  :root{--maxw:1580px}
   .dash{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.95fr);
     grid-template-areas:"hero hero hero" "plan wallets timeline" "weekly wallets timeline" "cards loans timeline" "log log timeline" "foot foot foot";}
 }
 
 /* ---------- hero ---------- */
-header{padding:6px 0 24px; border-bottom:1px solid var(--line)}
-.net{font-size:clamp(38px,10vw,60px); line-height:1; letter-spacing:-.045em; margin:10px 0 18px}
-.split{display:grid; gap:18px 22px; grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
-.split .v{font-size:18px; margin-top:2px}
-.alertbar{margin-top:18px; padding:11px 14px; border-radius:12px; font-size:13px;
-  background:color-mix(in srgb, var(--bad) 13%, transparent);
-  border:1px solid color-mix(in srgb, var(--bad) 40%, transparent)}
-.alertbar.ok{background:color-mix(in srgb, var(--good) 13%, transparent);
-  border-color:color-mix(in srgb, var(--good) 40%, transparent)}
+header.a-hero{padding:14px 0 26px; border-bottom:1px solid var(--line)}
+.net{font-size:clamp(42px,12vw,56px); font-weight:600; line-height:1.05; letter-spacing:-.035em; margin:6px 0 24px}
+.split{display:grid; gap:20px 24px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.split .v{font-size:21px; font-weight:600; letter-spacing:-.02em; margin-top:3px}
+.alertbar{margin-top:20px; padding:13px 16px; border-radius:var(--r-md); font-size:15px; line-height:1.4;
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  background:color-mix(in srgb, var(--bad) 12%, var(--card));
+  border:1px solid color-mix(in srgb, var(--bad) 32%, transparent)}
+.alertbar, .alertbar.ok, .alertbar.bad{color:var(--fg)}
+.alertbar.ok{background:color-mix(in srgb, var(--accent) 10%, var(--card));
+  border-color:color-mix(in srgb, var(--accent) 30%, transparent)}
 .alertbar + .alertbar{margin-top:10px}
 
-.shead{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; gap:10px 12px; flex-wrap:wrap}
-.shead .acts{display:flex; gap:6px}
+.shead{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:10px 14px; flex-wrap:wrap}
+.shead .acts{display:flex; gap:8px; align-items:center}
 
 /* ---------- surfaces ---------- */
-/* Own compositor layer per section, so a big innerHTML swap in one card can't tear/ghost
-   against whatever iOS Safari already had painted in a neighboring section mid-scroll. */
-.card, .plan, header.a-hero{ transform:translateZ(0); -webkit-backface-visibility:hidden }
-.card{background:var(--card); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; box-shadow:var(--shadow)}
-.row{display:flex; align-items:center; gap:9px; padding:12px 14px; border-bottom:1px solid var(--line);
-     transition:background .18s var(--ease)}
+/* Own compositor layer per section, so a big innerHTML swap in one card cannot tear or
+   ghost against what iOS Safari already painted in a neighbour mid-scroll. */
+.card, .plan, header.a-hero{transform:translateZ(0); -webkit-backface-visibility:hidden}
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--r); overflow:hidden}
+.row{display:flex; align-items:center; gap:3px 10px; flex-wrap:wrap;
+     padding:13px 16px; border-bottom:1px solid var(--line-soft); transition:background .18s var(--ease)}
 .row:last-child{border-bottom:0}
-.row:hover{background:var(--sunk)}
-.name{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.amt{white-space:nowrap}
-/* Coverage text ("Covers 12/14 · ₱67.55 more…") can wrap to 2-3 lines on a phone; align
-   everything to the top of that block instead of centering against its full height. */
-.kid{padding-left:30px; background:var(--sunk); position:relative; align-items:flex-start}
-.kid .dot{margin-top:5px}
-.kid .amt, .kid .btn.mini, .kid .iconbtn{margin-top:1px}
-.kid > div:first-child{margin-top:1px}
-.kid::before{content:""; position:absolute; left:17px; top:0; bottom:0; width:1px; background:var(--line)}
-.kid .name{font-size:15px}
-.head-row .name{font-weight:500}
-.empty{color:var(--dim); font-size:14px; padding:18px 14px}
+@media (hover:hover){ .row:hover{background:var(--sunk)} }
+.name{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:17px}
+.amt{white-space:nowrap; font-size:17px; flex:none}
+/* Actions collect in one box so they wrap to their own line together on a narrow phone
+   instead of shoving the balance off the row. */
+.rowacts{display:flex; align-items:center; gap:2px; margin-left:auto; flex:none}
+/* Coverage text can run to 2-3 lines on a phone: align to the top of that block. */
+.kid{padding-left:34px; background:var(--sunk); position:relative; align-items:flex-start}
+.kid .dot{margin-top:7px}
+.kid .amt{margin-top:1px}
+.kid::before{content:""; position:absolute; left:19px; top:0; bottom:0; width:1px; background:var(--line)}
+.kid .name{font-size:16px}
+.head-row{background:var(--card)}
+/* A wallet's title carries an inline "main" chip; truncating the line clipped the chip. */
+.head-row .name{font-weight:600; white-space:normal; overflow:visible; text-overflow:clip}
+.empty{color:var(--dim); font-size:15px; padding:22px 16px}
+.mvs{display:flex; flex-direction:column; flex:none; margin-top:2px}
+.mvs .iconbtn{min-height:22px; min-width:22px; padding:0; font-size:10px}
 
-button,select,input{font:inherit; color:inherit}
+button,select,input{font:inherit; color:inherit; letter-spacing:inherit}
 button{background:none; border:0; cursor:pointer}
-.btn{border:1px solid var(--line); background:var(--card); border-radius:99px; padding:7px 13px; font-size:13px;
-  transition:transform .16s var(--ease), background .16s, border-color .16s, box-shadow .16s}
-.btn:hover{border-color:var(--dim)}
-.btn:active{transform:scale(.96)}
-.btn.primary{background:var(--fg); color:var(--bg); border-color:var(--fg)}
-.btn.primary:hover{box-shadow:0 6px 18px -8px var(--fg)}
-.btn.ghost{border-color:transparent; color:var(--dim); padding:7px 6px}
-.btn.ghost:hover{color:var(--fg)}
-.btn.mini{padding:4px 10px; font-size:12px}
-.btn.big{padding:11px 20px; font-size:15px}
-.iconbtn{color:var(--dim); font-size:13px; padding:5px 5px; border-radius:8px; line-height:1; transition:color .16s, transform .16s var(--ease)}
-.iconbtn:hover{color:var(--fg)}
+/* Two button grammars only: a pill for anything that acts, a text link for anything quiet. */
+.btn{border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:var(--pill);
+  padding:8px 16px; font-size:15px; font-weight:400; min-height:36px; white-space:nowrap;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  transition:transform .16s var(--ease), background .16s, border-color .16s, opacity .16s}
+.btn:active{transform:scale(.95)}
+.btn:focus-visible{outline:2px solid var(--accent-hi); outline-offset:2px}
+.btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent)}
+.btn.ghost{border-color:transparent; background:none; color:var(--accent); padding:8px 10px}
+.btn.mini{padding:5px 12px; font-size:13px; min-height:30px}
+.btn.big{padding:12px 24px; font-size:17px; min-height:46px}
+.btn.bad{color:var(--bad)}
+.btn[disabled]{opacity:.3; cursor:default}
+.iconbtn{color:var(--accent); font-size:14px; padding:4px; border-radius:var(--r-sm); line-height:1;
+  display:inline-flex; align-items:center; justify-content:center;
+  transition:opacity .16s, transform .16s var(--ease)}
 .iconbtn:active{transform:scale(.9)}
 .iconbtn:disabled{opacity:.22; cursor:default}
-.dot{width:8px; height:8px; border-radius:99px; flex:none}
-.pill{font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:2px 7px; border-radius:99px; border:1px solid var(--line); color:var(--dim)}
-.cnt{font-size:11px; color:var(--dim); border:1px solid var(--line); border-radius:99px; padding:1px 7px}
-.wk{display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--line)}
-.wk:last-child{border-bottom:0}
-.wk.now{background:color-mix(in srgb, var(--accent) 8%, transparent)}
-.wk .rng{font-size:13px; width:96px; flex:none}
-.wk .mv{font-size:12px; color:var(--dim)}
-.wk .bal{width:96px; text-align:right; flex:none}
-select.inline{width:auto; padding:5px 8px; font-size:13px; border-radius:99px}
-/* iOS Safari auto-zooms the page on focusing any form control under 16px — these dropdowns
-   sit right in the header/section titles, so a stray tap there was zooming the whole page. */
-@media (max-width:767px){ select.inline{font-size:16px; padding:4px 7px} }
+.iconbtn:focus-visible{outline:2px solid var(--accent-hi); outline-offset:1px}
+/* Comfortable thumb targets on touch. The stacked reorder arrows are exempt: as a pair
+   they already occupy ~44px, and 44px each would make every section row 88px tall. */
+@media (max-width:767px){ .iconbtn{min-width:44px; min-height:40px} .mvs .iconbtn{min-width:22px; min-height:22px} }
 
-input,select{background:transparent; border:1px solid var(--line); border-radius:11px; padding:11px 12px; width:100%;
-  transition:border-color .16s, box-shadow .16s}
-input:focus,select:focus{outline:0; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
-label{display:block; margin-bottom:13px}
-label .eyebrow{display:block; margin-bottom:5px}
+.dot{width:9px; height:9px; border-radius:var(--pill); flex:none}
+.pill{font-size:12px; font-weight:600; padding:2px 9px; border-radius:var(--pill);
+  border:1px solid var(--line); color:var(--dim); white-space:nowrap}
+.pill.on{color:var(--good); border-color:color-mix(in srgb,var(--good) 40%,transparent);
+  background:color-mix(in srgb,var(--good) 10%,transparent)}
+.pill.due{color:var(--accent); border-color:color-mix(in srgb,var(--accent) 40%,transparent);
+  background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.cnt{font-size:12px; color:var(--dim); border:1px solid var(--line); border-radius:var(--pill); padding:1px 8px}
+
+/* ---------- segmented control ---------- */
+.seg{display:inline-flex; background:var(--sunk); border-radius:var(--pill); padding:2px;
+  border:1px solid var(--line-soft); max-width:100%}
+.seg label{position:relative; flex:1 1 auto; margin:0; display:block}
+.seg input{position:absolute; opacity:0; width:100%; height:100%; left:0; top:0; margin:0;
+  min-height:0; padding:0; border:0; cursor:pointer}
+.seg span{display:block; text-align:center; font-size:13.5px; padding:6px 13px; border-radius:var(--pill);
+  color:var(--fg2); white-space:nowrap; transition:background .2s var(--ease), color .2s}
+.seg input:checked + span{background:var(--card); color:var(--fg); font-weight:600}
+.seg input:focus-visible + span{outline:2px solid var(--accent-hi); outline-offset:1px}
+
+/* ---------- inputs ---------- */
+input,select{background:var(--card); border:1px solid var(--line); border-radius:var(--r-md);
+  padding:12px 14px; width:100%; min-height:44px; transition:border-color .16s, box-shadow .16s}
+input:focus,select:focus{outline:0; border-color:var(--accent-hi);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+label{display:block; margin-bottom:16px}
+label .eyebrow{display:block; margin-bottom:6px}
+select.inline{width:auto; padding:7px 12px; font-size:13.5px; border-radius:var(--pill);
+  min-height:34px; background:var(--sunk); border-color:var(--line-soft)}
+/* iOS zooms the page when a control under 16px takes focus, and these sit in section
+   headings — a stray tap there was zooming the whole dashboard. */
+@media (max-width:767px){ select.inline{font-size:16px; padding:6px 11px} }
 
 /* ---------- dialog ---------- */
-dialog{border:0; border-radius:20px; background:var(--card); color:var(--fg); padding:24px;
-  /* Explicit centering instead of relying on the UA default — some WebKit builds (notably
-     standalone/home-screen PWAs) fail to auto-center <dialog> and pin it top-left instead. */
+dialog{border:0; border-radius:20px; background:var(--card); color:var(--fg); padding:26px;
+  /* Explicit centering rather than the UA default — some WebKit builds (notably a
+     home-screen PWA) fail to auto-centre <dialog> and pin it top-left instead. */
   position:fixed; inset:0; margin:auto;
-  width:min(440px,calc(100vw - 32px)); max-height:86vh; box-shadow:0 30px 70px -20px rgba(0,0,0,.5);
-  opacity:0; transform:translateY(10px) scale(.97);
-  transition:opacity .24s var(--ease), transform .24s var(--ease), overlay .24s allow-discrete, display .24s allow-discrete}
+  width:min(440px,calc(100vw - 32px)); max-height:86vh;
+  opacity:0; transform:translateY(12px) scale(.97);
+  transition:opacity .26s var(--ease), transform .26s var(--ease), overlay .26s allow-discrete, display .26s allow-discrete}
 dialog[open]{opacity:1; transform:none}
-@starting-style{ dialog[open]{opacity:0; transform:translateY(10px) scale(.97)} }
-dialog::backdrop{background:rgba(0,0,0,.45); backdrop-filter:blur(4px); opacity:0; transition:opacity .24s, overlay .24s allow-discrete, display .24s allow-discrete}
+@starting-style{ dialog[open]{opacity:0; transform:translateY(12px) scale(.97)} }
+dialog::backdrop{background:rgba(0,0,0,.4); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  opacity:0; transition:opacity .26s, overlay .26s allow-discrete, display .26s allow-discrete}
 dialog[open]::backdrop{opacity:1}
 @starting-style{ dialog[open]::backdrop{opacity:0} }
-dialog h3{margin-bottom:18px}
-.dact{display:flex; gap:10px; justify-content:flex-end; margin-top:4px}
-.hint{font-size:12px; color:var(--dim); margin:-6px 0 14px}
+dialog h3{margin-bottom:20px}
+.dact{display:flex; gap:10px; justify-content:flex-end; margin-top:4px; flex-wrap:wrap}
+.hint{font-size:13.5px; color:var(--dim); margin:-8px 0 16px; line-height:1.4}
 
-/* ---------- plan ---------- */
-.plan{border:1px solid var(--line); border-radius:var(--r); padding:17px 18px; background:var(--card); box-shadow:var(--shadow)}
-.plan .big{font-size:29px; letter-spacing:-.035em; margin:6px 0 4px}
-.move{display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px dashed var(--line)}
+/* ---------- funding plan ---------- */
+.plan{border:1px solid var(--line); border-radius:var(--r); padding:20px; background:var(--card)}
+.plan .big{font-size:34px; font-weight:600; letter-spacing:-.03em; margin:4px 0; line-height:1.1}
+.move{display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--line-soft); flex-wrap:wrap}
 .move:last-child{border-bottom:0}
-.bar{height:4px; background:var(--sunk); border-radius:99px; overflow:hidden; margin-top:9px}
+.bar{height:6px; background:var(--sunk); border-radius:var(--pill); overflow:hidden; margin-top:12px}
 .bar i{display:block; height:100%; background:var(--accent); transition:width .7s var(--ease)}
-.ok{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)} .dim{color:var(--dim)}
-
-.grp{padding:10px 0; border-bottom:1px dashed var(--line)}
+.grp{padding:12px 0; border-bottom:1px solid var(--line-soft)}
 .grp:last-of-type{border-bottom:0}
-.grp .top{display:flex; align-items:center; gap:9px; font-size:14px}
-.grp .line{display:flex; gap:8px; font-size:12.5px; color:var(--dim); padding:4px 0 0 17px}
-.grand{display:flex; gap:10px; align-items:baseline; border-top:1px solid var(--line); margin-top:6px; padding-top:11px}
+.grp .top{display:flex; align-items:center; gap:10px; font-size:16px; flex-wrap:wrap}
+.grp .line{display:flex; gap:10px; font-size:13.5px; color:var(--dim); padding:5px 0 0 19px}
+.grand{display:flex; gap:10px; align-items:baseline; border-top:1px solid var(--line); margin-top:8px; padding-top:13px}
+
+/* ---------- weekly outlook ---------- */
+.wkw{border-bottom:1px solid var(--line-soft)}
+.wkw:last-child{border-bottom:0}
+.wkw > summary{display:flex; align-items:center; gap:11px; padding:13px 16px; min-height:58px; cursor:pointer}
+@media (hover:hover){ .wkw > summary:hover{background:var(--sunk)} }
+.wkw.now > summary{background:color-mix(in srgb, var(--accent) 7%, transparent)}
+.wkt{flex:1 1 120px; min-width:0; display:flex; flex-direction:column; gap:2px}
+.wkt b{font-size:16px; font-weight:600}
+.wkn{flex:none; text-align:right; display:flex; flex-direction:column; gap:1px}
+.wkn .bal{font-size:17px; font-weight:600}
+.wkb{padding:0 16px 14px 38px; background:var(--sunk)}
+.wkl{display:flex; gap:10px; align-items:baseline; padding:9px 0;
+  border-top:1px solid var(--line-soft); font-size:15px; flex-wrap:wrap}
+.wkl .d{flex:none; width:58px; font-size:13px; color:var(--dim)}
+.wkl.late .d{color:var(--bad)}
+.wkl.sum{border-top-color:var(--line); color:var(--dim); font-size:13.5px}
+.wkl .t{flex:1 1 110px; min-width:0}
+.wkl .m{flex:none; margin-left:auto; font-weight:600; white-space:nowrap}
+.wkl.inc .m{color:var(--good)}
+.wkl.inc .m.dim{color:var(--dim)}
+.wkb .empty{padding:14px 0 4px; border-top:1px solid var(--line-soft)}
+.wkfoot{padding:13px 16px; font-size:13.5px; color:var(--dim)}
+.wkfoot.bad{color:var(--bad)}
 
 /* ---------- timeline calendar ---------- */
-.legend{display:flex; gap:14px; flex-wrap:wrap; padding:13px 14px; border-bottom:1px solid var(--line); font-size:12px}
-.legend span{display:flex; align-items:center; gap:6px; color:var(--dim)}
-.nextup{display:flex; gap:9px; align-items:center; padding:11px 14px; border-bottom:1px solid var(--line); font-size:14px}
-.mon{padding:13px 11px 15px; border-bottom:1px solid var(--line)}
+.legend{display:flex; gap:14px; flex-wrap:wrap; padding:14px 16px; border-bottom:1px solid var(--line-soft); font-size:13.5px}
+.legend span{display:flex; align-items:center; gap:7px; color:var(--dim)}
+.nextup{display:flex; gap:10px; align-items:center; padding:13px 16px; border-bottom:1px solid var(--line-soft); font-size:16px; flex-wrap:wrap}
+.mon{padding:15px 12px 17px; border-bottom:1px solid var(--line-soft)}
 .mon:last-child{border-bottom:0}
-.monhead{display:flex; align-items:baseline; gap:8px; padding:2px 3px 10px}
-.monhead b{font-weight:500}
+.monhead{display:flex; align-items:baseline; gap:8px; padding:2px 4px 12px}
+.monhead b{font-weight:600; font-size:17px}
 .dow,.days{display:grid; grid-template-columns:repeat(7,1fr); gap:4px}
-.dow{font-size:10px; color:var(--dim); text-align:center; margin-bottom:5px; letter-spacing:.06em}
-.day{min-height:58px; border-radius:10px; padding:5px 2px 4px; display:flex; flex-direction:column;
-     align-items:center; gap:2px; border:1px solid transparent; transition:transform .18s var(--ease), background .18s}
-.day .n{font-size:11px; color:var(--dim); line-height:1}
-.day.has{background:var(--sunk); border-color:var(--line)}
-.day.has:hover{transform:translateY(-2px)}
-.day.has .n{color:var(--fg)}
-.day.late{background:color-mix(in srgb, var(--bad) 14%, transparent); border-color:color-mix(in srgb, var(--bad) 45%, transparent)}
+.dow{font-size:11px; color:var(--dim); text-align:center; margin-bottom:6px}
+.day{min-height:56px; border-radius:var(--r-md); padding:6px 2px 5px; display:flex; flex-direction:column;
+     align-items:center; gap:3px; border:1px solid transparent;
+     transition:transform .18s var(--ease), background .18s}
+.day .n{font-size:12px; color:var(--dim); line-height:1}
+.day.has{background:var(--sunk); border-color:var(--line-soft); cursor:pointer}
+.day.has:active{transform:scale(.94)}
+.day.has:focus-visible{outline:2px solid var(--accent-hi); outline-offset:1px}
+@media (hover:hover){ .day.has:hover{background:color-mix(in srgb,var(--accent) 10%,var(--sunk))} }
+.day.has .n{color:var(--fg); font-weight:600}
+.day.late{background:color-mix(in srgb, var(--bad) 13%, transparent); border-color:color-mix(in srgb, var(--bad) 40%, transparent)}
 .day.today{outline:2px solid var(--accent); outline-offset:-2px; background:color-mix(in srgb, var(--accent) 12%, var(--sunk))}
-.day.today .n{color:var(--accent); font-weight:600}
-.day .tag{font-size:7px; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); line-height:1}
-.day.today .a{margin-top:0}
+.day.today .n{color:var(--accent)}
+.day .tag{font-size:8px; color:var(--accent); line-height:1; font-weight:600}
 .day .dots{display:flex; gap:2px; flex-wrap:wrap; justify-content:center}
-.day .dots i{width:6px; height:6px; border-radius:99px}
-.day .a{font-size:9.5px; letter-spacing:-.02em; margin-top:auto}
+.day .dots i{width:6px; height:6px; border-radius:var(--pill)}
+.day .a{font-size:10px; letter-spacing:-.02em; margin-top:auto; color:var(--fg2)}
 .day.blank{visibility:hidden}
-.tlfoot{padding:11px 14px; font-size:12px; color:var(--dim); display:flex; gap:8px}
+.tlfoot{padding:13px 16px; font-size:13.5px; color:var(--dim); display:flex; gap:10px; flex-wrap:wrap}
 
-/* ---------- card ---------- */
-.cardface{padding:19px 18px 17px; border-bottom:1px solid var(--line)}
-.cardface .avail{font-size:33px; letter-spacing:-.035em; margin:6px 0 2px}
-.limitbar{height:7px; background:var(--sunk); border-radius:99px; overflow:hidden; margin:13px 0 7px; display:flex}
+/* ---------- credit cards ---------- */
+.cardface{padding:20px; border-bottom:1px solid var(--line-soft)}
+.cardface .avail{font-size:34px; font-weight:600; letter-spacing:-.03em; margin:6px 0 2px; line-height:1.1}
+.limitbar{height:8px; background:var(--sunk); border-radius:var(--pill); overflow:hidden; margin:15px 0 8px; display:flex}
 .limitbar i{display:block; height:100%; transition:width .7s var(--ease)}
 .limitbar .used{background:var(--accent)}
 .limitbar .open{background:var(--warn)}
-.cyc{padding:14px; border-bottom:1px solid var(--line)}
+.cyc{padding:16px; border-bottom:1px solid var(--line-soft)}
 .cyc:last-child{border-bottom:0}
 .cyc.openc{background:var(--sunk)}
-.cychead{display:flex; align-items:baseline; gap:8px; margin-bottom:2px}
-.pur{display:flex; gap:9px; align-items:center; padding:7px 0 7px 12px; font-size:14px; border-top:1px dashed var(--line)}
+.cychead{display:flex; align-items:baseline; gap:9px; margin-bottom:3px; flex-wrap:wrap}
+.pur{display:flex; gap:10px; align-items:center; padding:8px 0 8px 14px; font-size:15px;
+  border-top:1px solid var(--line-soft); flex-wrap:wrap}
 
-details summary{list-style:none; cursor:pointer}
+details summary{list-style:none}
 details summary::-webkit-details-marker{display:none}
-details[open] .chev{transform:rotate(90deg)}
-.chev{display:inline-block; transition:transform .2s var(--ease); color:var(--dim); font-size:12px}
-.inst{display:flex; align-items:center; gap:9px; padding:9px 14px 9px 28px; border-top:1px solid var(--line); background:var(--sunk); font-size:14px}
+details[open] > summary .chev{transform:rotate(90deg)}
+.chev{display:inline-block; transition:transform .2s var(--ease); color:var(--dim); font-size:13px; flex:none}
+.inst{display:flex; align-items:center; gap:10px; padding:10px 16px 10px 32px;
+  border-top:1px solid var(--line-soft); background:var(--sunk); font-size:15px; flex-wrap:wrap}
 
-footer{border-top:1px solid var(--line); padding-top:18px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; font-size:13px}
+footer{border-top:1px solid var(--line); padding-top:22px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:13.5px}
 
 /* ---------- welcome ---------- */
-#welcome{max-width:520px; margin:8vh auto; text-align:center}
-#welcome .mark{font-size:56px; line-height:1; letter-spacing:-.05em; margin-bottom:18px}
-#welcome p{color:var(--dim); font-size:15px; margin:12px 0 26px}
-#welcome .wacts{display:flex; gap:10px; justify-content:center; flex-wrap:wrap}
+#welcome{max-width:520px; margin:10vh auto; text-align:center}
+#welcome .mark{font-size:64px; font-weight:600; line-height:1; letter-spacing:-.05em; margin-bottom:20px}
+#welcome h2{font-size:clamp(34px,9vw,44px); letter-spacing:-.028em; line-height:1.08}
+#welcome p{color:var(--dim); font-size:19px; line-height:1.42; margin:14px 0 30px}
+#welcome .wacts{display:flex; gap:11px; justify-content:center; flex-wrap:wrap}
 body[data-state="empty"] .dash{display:none}
+body[data-state="empty"] .wrap{padding-top:calc(env(safe-area-inset-top) + 22px)}
 body[data-state="ready"] #welcome{display:none}
 
 /* ---------- motion ---------- */
@@ -248,11 +332,20 @@ body.boot .dash > *:nth-child(8){animation-delay:.44s}
 </head>
 <body class="boot" data-state="empty">
 
+<nav class="topbar">
+  <div class="inner">
+    <span class="mk">Ledger</span>
+    <button class="btn mini" id="undoBtn" disabled title="Undo the last change">&#8624; Undo</button>
+    <button class="btn mini" id="syncBtn">Set up sync</button>
+  </div>
+</nav>
+
+<main class="wrap">
+
 <div id="welcome">
-  <div class="mark num">₱</div>
+  <div class="mark num">&#8369;</div>
   <h2>Ledger</h2>
-  <p>Envelope budgeting for instalment loans and credit cards.<br>
-     Everything stays in this browser — nothing is ever uploaded.</p>
+  <p>Envelope budgeting for instalment loans and credit cards.</p>
   <div class="wacts">
     <button class="btn primary big" id="wStart">Set up my wallets</button>
     <button class="btn big" id="wImport">Import a backup</button>
@@ -263,48 +356,37 @@ body.boot .dash > *:nth-child(8){animation-delay:.44s}
 
 <div class="dash">
   <header class="a-hero">
-    <div class="shead" style="margin-bottom:0">
-      <div class="eyebrow">Net position</div>
-      <div style="display:flex;gap:6px">
-        <button class="btn mini" id="undoBtn" disabled title="undo the last change">↺ Undo</button>
-        <button class="btn mini" id="syncBtn">set up sync</button>
-      </div>
-    </div>
-    <div class="net num" id="net">₱0</div>
+    <div class="eyebrow">Net position</div>
+    <div class="net num" id="net">&#8369;0</div>
     <div class="split">
-      <div><div class="eyebrow">Assets</div><div class="v num" id="assets">₱0</div></div>
-      <div><div class="eyebrow">Owed</div><div class="v num bad" id="owed">₱0</div></div>
-      <div><div class="eyebrow">Safe to spend this week</div><div class="v num" id="safe">₱0</div><div class="sub" id="safeNote"></div></div>
-      <div><div class="eyebrow">Debt-free</div><div class="v" id="freeBy">—</div><div class="sub" id="freeNote"></div></div>
+      <div><div class="eyebrow">Assets</div><div class="v num" id="assets">&#8369;0</div></div>
+      <div><div class="eyebrow">Owed</div><div class="v num bad" id="owed">&#8369;0</div></div>
+      <div><div class="eyebrow">Safe to spend</div><div class="v num" id="safe">&#8369;0</div><div class="sub" id="safeNote"></div></div>
+      <div><div class="eyebrow">Debt-free</div><div class="v" id="freeBy">&mdash;</div><div class="sub" id="freeNote"></div></div>
     </div>
     <div id="alert"></div>
   </header>
 
   <section class="a-plan">
     <div class="shead"><h2>Fund the envelopes</h2>
-      <select id="horizon" class="inline">
-        <option value="7">next 7 days</option>
-        <option value="14" selected>next 14 days</option>
-        <option value="30">next 30 days</option>
-        <option value="9999">everything left</option>
-      </select>
+      <div class="seg" id="horizon">
+        <label><input type="radio" name="hz" value="7"><span>7d</span></label>
+        <label><input type="radio" name="hz" value="14" checked><span>14d</span></label>
+        <label><input type="radio" name="hz" value="30"><span>30d</span></label>
+        <label><input type="radio" name="hz" value="9999"><span>All</span></label>
+      </div>
     </div>
     <div class="plan" id="plan"></div>
   </section>
 
-  <section class="a-timeline">
-    <div class="shead"><h2>Payment timeline</h2><select id="tlFilter" class="inline"></select></div>
-    <div class="card" id="timeline"></div>
-  </section>
-
   <section class="a-weekly">
-    <div class="shead"><h2>Weekly outlook</h2></div>
+    <div class="shead"><h2>Weekly outlook</h2><span class="sub" id="wkNote"></span></div>
     <div class="card" id="weekly"></div>
   </section>
 
   <section class="a-wallets">
     <div class="shead"><h2>Wallets</h2>
-      <div class="acts"><button class="btn ghost" id="moveBtn">Move</button><button class="btn" id="addAcc">+ Section</button></div>
+      <div class="acts"><button class="btn ghost" id="moveBtn">Move money</button><button class="btn" id="addAcc">+ Section</button></div>
     </div>
     <div class="card" id="accounts"></div>
   </section>
@@ -316,13 +398,18 @@ body.boot .dash > *:nth-child(8){animation-delay:.44s}
     <div id="cards"></div>
   </section>
 
+  <section class="a-timeline">
+    <div class="shead"><h2>Payment timeline</h2><select id="tlFilter" class="inline"></select></div>
+    <div class="card" id="timeline"></div>
+  </section>
+
   <section class="a-loans">
     <div class="shead"><h2>Instalment loans</h2><button class="btn" id="addLoan">+ Loan</button></div>
     <div class="card" id="loans"></div>
   </section>
 
   <section class="a-log">
-    <div class="shead"><h2>Activity</h2><button class="btn ghost" id="clearLog">clear</button></div>
+    <div class="shead"><h2>Activity</h2><button class="btn ghost" id="clearLog">Clear</button></div>
     <div class="card" id="log"></div>
   </section>
 
@@ -330,10 +417,12 @@ body.boot .dash > *:nth-child(8){animation-delay:.44s}
     <button class="btn" id="exportBtn">Export backup</button>
     <button class="btn" id="icsBtn">Add to Calendar</button>
     <button class="btn" id="importBtn">Import</button>
-    <button class="btn ghost" id="resetBtn">Reset</button>
+    <button class="btn ghost bad" id="resetBtn">Reset</button>
     <span class="sub num" id="syncNote" style="margin-left:auto">Stored only in this browser</span>
   </footer>
 </div>
+
+</main>
 
 <input type="file" id="importFile" accept="application/json" hidden>
 <dialog id="dlg"><form method="dialog" id="dlgForm"></form></dialog>
@@ -453,9 +542,19 @@ function migrate(s){
   // since it is neither a parent nor anyone's child. Promote it to top level instead.
   const ids = new Set(s.accounts.map(a=>a.id));
   for(const a of s.accounts) if(a.parent && !ids.has(a.parent)) a.parent = null;
+  s.loans = s.loans.filter(L => L && typeof L === "object" && L.id);
   for(const L of s.loans){
-    if(isCard(L)){ if(!Array.isArray(L.purchases)) L.purchases = []; L.sDay = +L.sDay || 9; L.dDay = +L.dDay || 19; L.limit = r2(L.limit); rebuildCard(L); }
-    else if(!Array.isArray(L.items)) L.items = [];
+    if(isCard(L)){
+      if(!Array.isArray(L.purchases)) L.purchases = [];
+      // Amounts come back from JSON as whatever was in the file; an un-coerced string or
+      // null here turns every derived statement total into NaN.
+      L.purchases = L.purchases.filter(x => x && x.id).map(x => ({...x, amount:r2(x.amount)}));
+      L.sDay = +L.sDay || 9; L.dDay = +L.dDay || 19; L.limit = r2(L.limit); rebuildCard(L);
+    } else {
+      L.items = Array.isArray(L.items)
+        ? L.items.filter(i => i && i.due).map(i => ({...i, amount:r2(i.amount), paid:!!i.paid}))
+        : [];
+    }
   }
   s.allowance = normAllowance(s.allowance);
   s.v = DATA_V;
@@ -473,7 +572,19 @@ function normAllowance(a){
   if(!Number.isFinite(amount) || amount <= 0) return null;
   return {weekday, amount, lastAdded: typeof a.lastAdded === "string" ? a.lastAdded : ""};
 }
-function isAllowanceDay(){ return !!S.allowance && new Date().getDay()===S.allowance.weekday && S.allowance.lastAdded!==today(); }
+// The most recent scheduled allowance date on or before today — "this week's" allowance.
+// Returns today itself when today is the scheduled weekday.
+const allowanceDateFor = wd => addDays(today(), -(((new Date().getDay() - wd) + 7) % 7));
+function lastAllowanceDate(){ return S.allowance ? allowanceDateFor(S.allowance.weekday) : null; }
+// Has the allowance for the current week already been added to the balances?
+// lastAdded is a plain YYYY-MM-DD, so a string compare is a date compare.
+function allowanceClaimed(){
+  const d = lastAllowanceDate();
+  return !!d && (S.allowance.lastAdded || "") >= d;
+}
+// Claimable whenever this week's allowance has not been added yet — not only on the day
+// itself. Missing the exact weekday used to make the prompt vanish for a whole week.
+function isAllowanceDay(){ return !!S.allowance && !allowanceClaimed(); }
 // Days until the next scheduled allowance — the window "safe to spend" and the weekly
 // outlook both use. No schedule set = a plain 7-day week, same idea without the exact date.
 function daysUntilAllowance(){
@@ -573,9 +684,12 @@ async function setupSync(){
 function renderSyncBtn(){
   const b = $("#syncBtn"); if(!b) return;
   const has = syncCode();
-  b.textContent = has ? "synced ⇄" : "set up sync";
+  b.textContent = has ? "Synced ⇄" : "Set up sync";
   setSyncNote(has ? "Synced across your devices" : "Stored only in this browser");
 }
+
+// The funding window, read off the segmented control.
+const horizon = () => Number(document.querySelector('input[name="hz"]:checked')?.value) || 14;
 
 const acc = id => S.accounts.find(a=>a.id===id);
 const loan = id => S.loans.find(L=>L.id===id);
@@ -704,9 +818,11 @@ function paint(){
     ? `<div class="alertbar bad">${late.length} payment${late.length>1?"s":""} overdue ·
        ${money(r2(late.reduce((s,d)=>s+d.it.amount,0)))} — ${esc(late[0].L.label)} since ${nice(late[0].it.due)}</div>` : "";
   if(isAllowanceDay() && incomeAcc()){
-    alertHtml += `<div class="alertbar ok" style="display:flex;align-items:center;gap:10px">
-      <span class="grow">It's allowance day — add ${money(S.allowance.amount)} to ${esc(incomeAcc().name)}?</span>
-      <button class="btn mini primary" data-add-allowance>Add</button></div>`;
+    const on = lastAllowanceDate();
+    alertHtml += `<div class="alertbar ok">
+      <span class="grow">${on===today() ? "It&rsquo;s allowance day" : `Your ${WEEKDAYS[S.allowance.weekday]} allowance (${nice(on)}) has not been added`}
+        — put ${money(S.allowance.amount)} into ${esc(incomeAcc().name)}?</span>
+      <button class="btn mini primary" data-add-allowance>Add it</button></div>`;
   }
   $("#alert").innerHTML = alertHtml;
 
@@ -758,24 +874,28 @@ function renderAccounts(){
           <div class="sub">${kids.length? `wallet ${money(p.bal)} · group ${money(groupTotal(p))}`
                                         : ({cash:"Physical cash",gcash:"E-wallet",gotyme:"Bank"})[p.kind]}</div></div>
         <div class="amt num">${money(p.bal)}</div>
-        <button class="iconbtn" data-xfer="${p.id}" title="transfer">⇄</button>
-        ${p.id===m?.id?`<button class="iconbtn" data-add-kid="${p.id}" title="add section">+</button>`:""}
-        <button class="iconbtn" data-edit-acc="${p.id}">edit</button>
+        <div class="rowacts">
+          <button class="iconbtn" data-xfer="${p.id}" title="Transfer" aria-label="Transfer">⇄</button>
+          ${p.id===m?.id?`<button class="iconbtn" data-add-kid="${p.id}" title="Add section" aria-label="Add section">+</button>`:""}
+          <button class="iconbtn" data-edit-acc="${p.id}" title="Edit" aria-label="Edit">Edit</button>
+        </div>
       </div>`;
     return head + kids.map((k,i)=>{
       const L = loan(k.loanId);
-      const note = k.loanId==="income" ? `<span class="pill">allowance</span>` : covText(k);
+      const note = k.loanId==="income" ? `<span class="pill">allowance pool</span>` : covText(k);
       return `<div class="row kid">
-        <div style="display:flex;flex-direction:column;gap:1px">
-          <button class="iconbtn" data-mv="${k.id}:-1" ${i===0?"disabled":""}>▲</button>
-          <button class="iconbtn" data-mv="${k.id}:1" ${i===kids.length-1?"disabled":""}>▼</button>
+        <div class="mvs">
+          <button class="iconbtn" data-mv="${k.id}:-1" aria-label="Move up" ${i===0?"disabled":""}>▲</button>
+          <button class="iconbtn" data-mv="${k.id}:1" aria-label="Move down" ${i===kids.length-1?"disabled":""}>▼</button>
         </div>
         ${L?`<span class="dot" style="background:${colorOf(L)}"></span>`:""}
         <div class="grow"><div class="name">${esc(k.name)}</div><div class="sub">${note}</div></div>
         <div class="amt num">${money(k.bal)}</div>
-        ${k.loanId==="income"?"":`<button class="btn mini" data-fund="${k.id}">Fund</button>`}
-        <button class="iconbtn" data-xfer="${k.id}" title="transfer">⇄</button>
-        <button class="iconbtn" data-edit-acc="${k.id}">edit</button>
+        <div class="rowacts">
+          ${k.loanId==="income"?"":`<button class="btn mini" data-fund="${k.id}">Fund</button>`}
+          <button class="iconbtn" data-xfer="${k.id}" title="Transfer" aria-label="Transfer">⇄</button>
+          <button class="iconbtn" data-edit-acc="${k.id}" title="Edit" aria-label="Edit">Edit</button>
+        </div>
       </div>`;
     }).join("");
   }).join("") || `<div class="empty">No wallets yet.</div>`;
@@ -791,6 +911,8 @@ function renderCards(){
     const open = L.items.find(i=>i.due===openDue);
     const billed = r2(stmts.filter(i=>!i.paid).reduce((s,i)=>s+i.amount,0));
     const openAmt = open ? open.amount : 0;
+    // A card with no limit set would make every bar width NaN/Infinity.
+    const pct = v => L.limit > 0 ? Math.min(100, Math.max(0, v / L.limit * 100)) : 0;
 
     const cyc = (it,isOpen)=>{
       const n = daysTo(it.due);
@@ -807,7 +929,7 @@ function renderCards(){
             <span class="grow">${esc(p.label)}</span>
             <span class="num">${money(p.amount)}</span>
             <button class="iconbtn" data-edit-pur="${L.id}:${p.id}">edit</button></div>`).join("")}
-        ${it.paid ? `<button class="btn mini" data-unpay-card="${L.id}:${it.due}" style="margin-top:9px">undo payment</button>`
+        ${it.paid ? `<button class="btn mini" data-unpay-card="${L.id}:${it.due}" style="margin-top:9px">mark unpaid</button>`
                   : `<button class="btn ${isOpen?"mini":"primary"}" data-pay-card="${L.id}:${it.due}" style="margin-top:9px">Pay ${money(it.amount)}</button>`}
       </div>`;
     };
@@ -815,13 +937,13 @@ function renderCards(){
     return `<div class="card" style="margin-bottom:14px">
       <div class="cardface">
         <div class="cychead"><span class="grow eyebrow">${esc(L.provider)} · available credit</span>
-          <button class="btn mini" data-link="${L.id}">${env?`⇄ ${esc(env.name)}`:"link a wallet"}</button>
-          <button class="iconbtn" data-edit-card="${L.id}">edit</button></div>
+          <button class="btn mini" data-link="${L.id}">${env?`⇄ ${esc(env.name)}`:"Link a wallet"}</button>
+          <button class="iconbtn" data-edit-card="${L.id}" aria-label="Edit card">Edit</button></div>
         <div class="avail num ${avail<0?"bad":""}">${money(avail)}</div>
-        <div class="sub">billed ${L.sDay}th, due ${L.dDay}th${env?` · funded by ${esc(env.name)}`:""}</div>
+        <div class="sub">Billed on the ${L.sDay}th, due on the ${L.dDay}th${env?` · funded by ${esc(env.name)}`:""}</div>
         <div class="limitbar">
-          <i class="used" style="width:${Math.min(100, billed/L.limit*100)}%"></i>
-          <i class="open" style="width:${Math.max(0, Math.min(100-billed/L.limit*100, openAmt/L.limit*100))}%"></i></div>
+          <i class="used" style="width:${pct(billed)}%"></i>
+          <i class="open" style="width:${Math.min(pct(openAmt), 100-pct(billed))}%"></i></div>
         <div class="cychead sub"><span class="grow num">${money(out)} used</span>
           <span class="num">${money(L.limit)} limit</span></div>
         ${out? `<div class="sub" style="margin-top:5px">
@@ -871,7 +993,7 @@ function renderLoans(){
 }
 
 function renderPlan(){
-  const days = Number($("#horizon").value);
+  const days = horizon();
   const {rows, short, orphanNeed, srcs} = fundingPlan(days);
   const need = r2(dues(days).reduce((s,d)=>s+d.it.amount,0));
   const gapTotal = r2(rows.reduce((s,r)=>s+r.gap,0));
@@ -935,30 +1057,108 @@ function renderPlan(){
 }
 
 // Total assets today, carried forward week by week: minus everything due that week,
-// plus allowance if the schedule lands one or more times in it. Conservative on purpose —
-// no allowance configured means 0 income assumed, never a fabricated number.
+// plus allowance if the schedule lands in it. Conservative on purpose — no allowance
+// configured means 0 income assumed, never a fabricated number.
+//
+// Two things this has to get right, because both silently mis-state the balance:
+//  1. Anything already overdue is still money that must be found, so it belongs in
+//     week 0. Filtering on `due >= today` dropped it from the outlook entirely.
+//  2. The starting balance ALREADY contains an allowance that was claimed this week.
+//     Counting that same occurrence again as future income double-counts it, so each
+//     occurrence is only income while its date is newer than `lastAdded`.
 function weeklyOutlook(weeks){
   let bal = r2(S.accounts.reduce((s,a)=>s+a.bal,0));
   const start = today(), rows = [];
+  const claimedTo = S.allowance?.lastAdded || "";
   for(let w=0; w<weeks; w++){
     const wStart = addDays(start, w*7), wEnd = addDays(start, w*7+6);
-    const obligations = r2(S.loans.reduce((s,L)=>
-      s + unpaid(L).filter(i=>i.due>=wStart && i.due<=wEnd).reduce((t,i)=>t+i.amount,0), 0));
-    let income = 0;
-    if(S.allowance) for(let d=0; d<7; d++)
-      if(new Date(addDays(wStart,d)+"T00:00:00").getDay() === S.allowance.weekday) income += S.allowance.amount;
+    const items = [];
+    for(const L of S.loans) for(const it of unpaid(L))
+      if(it.due <= wEnd && (w===0 || it.due >= wStart)) items.push({L, it});
+    items.sort((a,b)=> a.it.due < b.it.due ? -1 : 1);
+    const obligations = r2(items.reduce((s,x)=>s+x.it.amount,0));
+
+    const pays = [];
+    if(S.allowance) for(let d=0; d<7; d++){
+      const day = addDays(wStart, d);
+      if(new Date(day+"T00:00:00").getDay() === S.allowance.weekday)
+        pays.push({date:day, amount:S.allowance.amount, claimed: day <= claimedTo});
+    }
+    const income = r2(pays.filter(p=>!p.claimed).reduce((s,p)=>s+p.amount, 0));
+
+    const open = bal;
     bal = r2(bal + income - obligations);
-    rows.push({wStart, wEnd, obligations, income, bal});
+    rows.push({wStart, wEnd, items, obligations, income, pays, open, bal,
+               overdue: items.filter(x=>x.it.due < start).length});
   }
   return rows;
 }
+
+const WK_WEEKS = 8;
 function renderWeekly(){
-  const rows = weeklyOutlook(8);
-  $("#weekly").innerHTML = rows.map((r,i)=>`<div class="wk${i===0?" now":""}">
-      <span class="rng">${nice(r.wStart)}–${nice(r.wEnd)}</span>
-      <span class="grow mv">${r.obligations?`-${money(r.obligations)} due`:"nothing due"}${r.income?` · +${money(r.income)} allowance`:""}</span>
-      <span class="bal num ${r.bal<0?"bad":""}">${money(r.bal)}</span>
-    </div>`).join("");
+  const box = $("#weekly");
+  // A re-render rebuilds the markup, so carry over which weeks the user had expanded.
+  // First paint opens this week only.
+  const wasOpen = [...box.querySelectorAll("details")].map(d=>d.open);
+  const rows = weeklyOutlook(WK_WEEKS);
+
+  const note = $("#wkNote");
+  if(note) note.innerHTML = !S.allowance
+    ? `<span class="dim">No allowance scheduled — income is assumed to be zero</span>`
+    : allowanceClaimed()
+      ? `${money(S.allowance.amount)} every ${WEEKDAYS[S.allowance.weekday]} · <span class="ok">this week claimed</span>`
+      : `${money(S.allowance.amount)} every ${WEEKDAYS[S.allowance.weekday]} · <span class="warn">this week not claimed yet</span>`;
+
+  box.innerHTML = rows.map((r,i)=>{
+    const label = i===0 ? "This week" : i===1 ? "Next week" : `In ${i} weeks`;
+    const dueTxt = r.obligations
+      ? `<span class="${r.overdue?"bad":""}">${money(r.obligations)} due${r.overdue?` · ${r.overdue} overdue`:""}</span>`
+      : `<span class="dim">Nothing due</span>`;
+
+    // Allowance lines first — whether the money is already in the balance is the thing
+    // that most often makes a week read wrong.
+    const incLines = r.pays.map(p=>`<div class="wkl inc">
+        <span class="d">${nice(p.date)}</span>
+        <span class="t">Allowance ${p.claimed
+          ? `<span class="pill on">claimed</span>`
+          : `<span class="pill due">expected</span>`}</span>
+        <span class="m num${p.claimed?" dim":""}">${p.claimed?"":"+"}${money(p.amount)}</span>
+      </div>`).join("");
+
+    // A red date is the whole overdue signal — a chip or an "overdue" suffix just wrapped
+    // onto a second line and doubled the height of every late row. The count is in the summary.
+    const dueLines = r.items.map(x=>{
+      const late = x.it.due < today();
+      return `<div class="wkl${late?" late":""}">
+        <span class="d">${nice(x.it.due)}</span>
+        <span class="t"><span class="dot" style="background:${colorOf(x.L)};display:inline-block;vertical-align:middle;margin-right:7px"></span>${esc(x.L.label)}</span>
+        <span class="m num">&minus;${money(x.it.amount)}</span>
+      </div>`;
+    }).join("");
+
+    const body = (incLines + dueLines) || `<div class="empty">Nothing moves this week.</div>`;
+    const openAttr = (wasOpen[i] ?? i===0) ? " open" : "";
+
+    return `<details class="wkw${i===0?" now":""}"${openAttr}>
+      <summary>
+        <span class="chev">&rsaquo;</span>
+        <span class="wkt"><b>${label}</b><span class="sub">${nice(r.wStart)} &ndash; ${nice(r.wEnd)}</span></span>
+        <span class="wkn"><span class="bal num ${r.bal<0?"bad":""}">${money(r.bal)}</span>
+          <span class="sub">${dueTxt}</span></span>
+      </summary>
+      <div class="wkb">${body}
+        <div class="wkl sum">
+          <span class="t">Opens ${money(r.open)}</span>
+          <span class="d" style="width:auto">closes</span>
+          <span class="m num ${r.bal<0?"bad":""}">${money(r.bal)}</span>
+        </div>
+      </div>
+    </details>`;
+  }).join("");
+
+  const worst = rows.find(r=>r.bal<0);
+  if(worst) box.insertAdjacentHTML("beforeend",
+    `<div class="wkfoot bad">Balance goes negative in the week of ${nice(worst.wStart)}.</div>`);
 }
 
 const TL_MONTHS = 2;
@@ -1010,7 +1210,10 @@ function renderTimeline(){
         continue;
       }
       const cls = ["day","has", daysTo(d)<0?"late":"", isToday?"today":""].filter(Boolean).join(" ");
-      cells.push(`<div class="${cls}" title="${hit.map(x=>esc(x.L.label)+" "+money(x.it.amount)).join(" · ")}">
+      // data-day makes the cell tappable — `title` alone is a desktop-only affordance and
+      // this is used mostly on a phone.
+      cells.push(`<div class="${cls}" role="button" tabindex="0" data-day="${d}"
+        title="${hit.map(x=>esc(x.L.label)+" "+money(x.it.amount)).join(" · ")}">
         <span class="n">${n}</span>
         <span class="dots">${hit.map(x=>`<i style="background:${colorOf(x.L)}"></i>`).join("")}</span>
         <span class="a num">${short(totalOf(d))}</span>
@@ -1029,6 +1232,16 @@ function renderTimeline(){
 }
 
 // ---------- dialog ----------
+// Read-only sheet. Clears ask()'s submit handler, or the previous form's callback would
+// fire again when this one closes.
+function info(title, html){
+  const f = $("#dlgForm");
+  f.onsubmit = null;
+  f.innerHTML = `<h3>${esc(title)}</h3>${html}
+    <div class="dact"><button value="cancel" class="btn primary">Done</button></div>`;
+  $("#dlg").showModal();
+}
+
 function ask(title, fields, onOk){
   const f = $("#dlgForm");
   f.innerHTML = `<h3>${esc(title)}</h3>` + (fields.hint?`<p class="hint">${fields.hint}</p>`:"") + fields.map(x=>{
@@ -1122,7 +1335,7 @@ function reorder(id, dir){
 }
 
 document.body.addEventListener("click", e=>{
-  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-add-allowance],[data-xfer]");
+  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-add-allowance],[data-xfer],[data-day]");
   if(!t) return;
   const pick = k => { const [id,i] = (t.dataset[k]||"").split(":"); return [loan(id), +i]; };
   const pickCard = k => { const [id,key] = (t.dataset[k]||"").split(":"); return [loan(id), key]; };
@@ -1141,6 +1354,15 @@ document.body.addEventListener("click", e=>{
         if(d.env){ acc(d.env).loanId = L.id; logIt(`${acc(d.env).name} now funds ${L.label}`); }
         else logIt(`${L.label} unlinked`);
         render(); });
+  }
+
+  if(t.dataset.day){
+    const d = t.dataset.day, hit = dues(9999).filter(x=>x.it.due===d);
+    info(niceY(d), hit.map(x=>`<div class="wkl">
+        <span class="t"><span class="dot" style="background:${colorOf(x.L)};display:inline-block;vertical-align:middle;margin-right:8px"></span>${esc(x.L.provider)} · ${esc(x.L.label)}</span>
+        <span class="m num">${money(x.it.amount)}</span></div>`).join("")
+      + `<div class="grand"><span class="grow eyebrow">Total · ${hit.length} payment${hit.length>1?"s":""}</span>
+         <span class="num" style="font-size:19px;font-weight:600">${money(r2(hit.reduce((s,x)=>s+x.it.amount,0)))}</span></div>`);
   }
 
   if(t.dataset.addKid) addSection(t.dataset.addKid);
@@ -1195,7 +1417,7 @@ document.body.addEventListener("click", e=>{
 
   if(t.dataset.fund){
     const env = acc(t.dataset.fund), L = loan(env.loanId);
-    const gap = L ? r2(dues(Number($("#horizon").value), L).reduce((s,d)=>s+d.it.amount,0) - env.bal) : 0;
+    const gap = L ? r2(dues(horizon(), L).reduce((s,d)=>s+d.it.amount,0) - env.bal) : 0;
     const f = [{name:"src",label:"Take from",type:"select",options:srcOptions(),value:incomeAcc()?.id},
                {name:"amount",label:"Amount",type:"number",value:Math.max(0,gap) || "",required:1}];
     f.hint = L ? `${env.name} holds ${money(env.bal)}. Suggested tops it up for the window.` : "";
@@ -1225,7 +1447,15 @@ document.body.addEventListener("click", e=>{
       if(r2(d.bal)!==a.bal) logIt(`${a.name}: ${money(a.bal)} → ${money(r2(d.bal))}`);
       a.name=d.name; a.bal=r2(d.bal); if("loanId" in d) a.loanId=d.loanId;
       if(isAllowanceAcc){
-        const next = normAllowance({weekday:d.aday, amount:d.aamt, lastAdded:S.allowance?.lastAdded||""});
+        // A brand-new schedule set mid-week must not immediately offer the occurrence that
+        // already passed — that money is either already in the balance or was never coming.
+        // Setting one up ON the day is left unclaimed, since it may still be owed.
+        let seed = S.allowance?.lastAdded || "";
+        if(!S.allowance && d.aday !== ""){
+          const prev = allowanceDateFor(Number(d.aday));
+          if(prev !== today()) seed = prev;
+        }
+        const next = normAllowance({weekday:d.aday, amount:d.aamt, lastAdded:seed});
         if(next){ S.allowance = next; logIt(`Allowance set: ${money(next.amount)} every ${WEEKDAYS[next.weekday]}`); }
         else if(S.allowance){ S.allowance = null; logIt("Allowance schedule cleared"); }
       }
@@ -1242,13 +1472,22 @@ document.body.addEventListener("click", e=>{
 
   if(t.dataset.pay){
     const [L,i] = pick("pay"), it = L.items[i], env = envelopeFor(L.id);
-    ask(`Pay ${L.label}`,[
-      {name:"src",label:"From",type:"select",options:allAccOptions(),value:(env||mainAcc()).id},
-      {name:"amount",label:"Amount",type:"number",value:it.amount}],
+    const f = [{name:"src",label:"From",type:"select",options:allAccOptions(),value:(env||mainAcc()).id},
+               {name:"amount",label:"Amount",type:"number",value:it.amount}];
+    f.hint = "Pay less than the instalment and the rest stays owed on this date.";
+    ask(`Pay ${L.label}`, f,
       (v,dd)=>{ if(v!=="ok") return;
         const a = acc(dd.src), amt = r2(dd.amount);
-        a.bal = r2(a.bal - amt); it.paid = true; it.amount = amt;
-        logIt(`Paid ${L.label} ${money(amt)} from ${a.name}`); render(); });
+        if(!(amt > 0)) return;
+        a.bal = r2(a.bal - amt);
+        if(amt < it.amount){
+          it.amount = r2(it.amount - amt); // still unpaid, just smaller
+          logIt(`Part-paid ${L.label} ${money(amt)} from ${a.name} · ${money(it.amount)} still due ${nice(it.due)}`);
+        } else {
+          it.paid = true; it.amount = amt;
+          logIt(`Paid ${L.label} ${money(amt)} from ${a.name}`);
+        }
+        render(); });
   }
   if(t.dataset.unpay){ const [L,i]=pick("unpay"); L.items[i].paid=false; render(); }
   if(t.dataset.editInst){
@@ -1336,6 +1575,13 @@ $("#importFile").onchange = async e=>{
 };
 $("#resetBtn").onclick = ()=>{ if(confirm("Erase everything stored in this browser?")){ S = blank(); save(); render(); } };
 
+// The top bar is frosted glass; its hairline only appears once content is behind it.
+addEventListener("scroll", ()=> document.body.classList.toggle("scrolled", scrollY > 4), {passive:true});
+// Calendar day cells are divs with role="button" — give them the keyboard behaviour that implies.
+document.body.addEventListener("keydown", e=>{
+  if((e.key==="Enter" || e.key===" ") && e.target.dataset?.day){ e.preventDefault(); e.target.click(); }
+});
+
 if("serviceWorker" in navigator) addEventListener("load", ()=> navigator.serviceWorker.register("sw.js").catch(()=>{}));
 
 // ---------- self-check: open with ?test ----------
@@ -1383,10 +1629,33 @@ function demo(){
 
   S.allowance = {weekday:todayDow, amount:1000, lastAdded:""};
   const wk = weeklyOutlook(2);
-  const wantObl = r2(unpaid(loan("K")).filter(i=>i.due>=wk[0].wStart && i.due<=wk[0].wEnd).reduce((s,i)=>s+i.amount,0));
-  ok(wk[0].obligations===wantObl, "week 0 obligations match dues in that 7-day span", {got:wk[0].obligations, want:wantObl});
+  // Week 0 is "everything still owed up to the end of this week" — overdue included.
+  const wantObl = r2(S.loans.flatMap(unpaid).filter(i=>i.due<=wk[0].wEnd).reduce((s,i)=>s+i.amount,0));
+  ok(wk[0].obligations===wantObl, "week 0 obligations include everything already overdue", {got:wk[0].obligations, want:wantObl});
+  ok(wk[0].items.length===S.loans.flatMap(unpaid).filter(i=>i.due<=wk[0].wEnd).length, "week 0 lists one line per payment");
+  ok(wk[1].items.every(x=>x.it.due>=wk[1].wStart && x.it.due<=wk[1].wEnd), "later weeks stay inside their own window");
   ok(wk[0].income===1000, "allowance falling in week 0 counts once", wk[0]);
+  ok(wk[0].pays.length===1 && wk[0].pays[0].claimed===false, "the unclaimed occurrence is flagged as expected");
   ok(r2(S.accounts.reduce((s,a)=>s+a.bal,0) + wk[0].income - wk[0].obligations)===wk[0].bal, "running balance = start + income - obligations");
+  ok(wk[0].open===r2(S.accounts.reduce((s,a)=>s+a.bal,0)), "week 0 opens on today's real balance");
+
+  // The bug this section exists for: an allowance already added sits in the balance, so
+  // counting the same occurrence again as future income double-counts it.
+  S.allowance = {weekday:todayDow, amount:1000, lastAdded:today()};
+  const wkC = weeklyOutlook(2);
+  ok(wkC[0].income===0, "an allowance already claimed this week is not counted again", wkC[0]);
+  ok(wkC[0].pays[0].claimed===true, "the claimed occurrence is flagged as claimed");
+  ok(wkC[1].income===1000, "next week's allowance is still counted", wkC[1]);
+  ok(r2(wkC[0].bal + 1000)===wk[0].bal, "claiming shifts week 0 down by exactly one allowance");
+  ok(allowanceClaimed()===true, "this week reads as claimed");
+  S.allowance = {weekday:todayDow, amount:1000, lastAdded:""};
+  ok(allowanceClaimed()===false, "an unclaimed week reads as unclaimed");
+  ok(lastAllowanceDate()===today(), "today is this week's allowance date when today is the weekday");
+  S.allowance = {weekday:(todayDow+6)%7, amount:1000, lastAdded:""};
+  ok(lastAllowanceDate()===addDays(today(),-1), "yesterday's weekday resolves to yesterday");
+  ok(isAllowanceDay()===true, "a missed allowance stays claimable after its day");
+  S.allowance.lastAdded = addDays(today(),-1);
+  ok(isAllowanceDay()===false, "claiming a missed allowance clears the prompt");
   S.allowance = null;
 
   // --- allowance edge cases: anything partial or out of range must collapse to null ---
@@ -1430,6 +1699,28 @@ function demo(){
   ok(migrate({}).accounts.length===0, "migrating an empty object does not throw");
   ok(migrate({accounts:"nope",loans:null,log:5}).accounts.length===0, "migration repairs wrong-typed fields");
   ok(migrate({accounts:[{id:"z",bal:"12.5"}],loans:[],log:[]}).accounts[0].bal===12.5, "string balances are coerced to numbers");
+
+  // --- a corrupt loans array must not take the whole app down ---
+  ok(migrate({accounts:[],loans:[null,{},{id:"L",freq:"week",items:null}],log:[]}).loans.length===1,
+     "migration drops junk loan entries and keeps the real one");
+  ok(migrate({accounts:[],loans:[{id:"L",freq:"week",items:null}],log:[]}).loans[0].items.length===0,
+     "a loan with no items array degrades to an empty schedule");
+  ok(migrate({accounts:[],loans:[{id:"L",freq:"week",items:[{due:"2026-01-01",amount:"40.21"},{amount:5}]}],log:[]})
+       .loans[0].items.every(i=>Number.isFinite(i.amount) && i.due),
+     "instalment amounts are coerced and dateless rows dropped");
+  const badCard = migrate({accounts:[],log:[],loans:[{id:"C",freq:"card",limit:"1000",sDay:9,dDay:19,
+    purchases:[{id:"p",date:"2026-01-02",label:"x",amount:"10.5"},{amount:1}]}]}).loans[0];
+  ok(badCard.items.every(i=>Number.isFinite(i.amount)) && outstanding(badCard)===10.5,
+     "string purchase amounts are coerced instead of turning totals into NaN", badCard.items);
+
+  // --- partial payment on an instalment must leave the remainder owed ---
+  const payL = {id:"P", provider:"x", label:"Part", ref:"", freq:"week", items:gen("2026-01-05",2,"week",100)};
+  const payIt = payL.items[0];
+  const part = 40;                       // what the click handler does when amt < it.amount
+  payIt.amount = r2(payIt.amount - part);
+  ok(payIt.paid===false && payIt.amount===60, "underpaying leaves the instalment open for the rest", payIt);
+  ok(r2(payL.items.reduce((s,i)=>s+(i.paid?0:i.amount),0))===160,
+     "the shortfall is still counted in what is owed");
 
   // --- undo restores exact parent/child relations, no orphans or duplicate ids ---
   undoStack = []; suppressHistory = false;
