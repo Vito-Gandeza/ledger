@@ -1,8 +1,8 @@
 # Ledger
 
 Envelope budgeting for instalment loans and credit cards. One static HTML file, no build step,
-no backend, no accounts. Everything you enter is stored in your own browser's `localStorage` and
-never leaves the device.
+no build step. Everything you enter is stored in your own browser's `localStorage`; turning on
+sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
 
 ## What it does
 
@@ -18,6 +18,7 @@ never leaves the device.
   which loan bites first, and applies the transfers in one click.
 - **Payment timeline.** A month calendar with per-loan colour dots and per-day totals. Tap a day
   for its breakdown.
+- **Projection chart.** Eight weeks of closing balance as a column chart above the weekly rows.
 - **Safe to spend.** Allowance left after every envelope is topped up before the next allowance lands.
 - **Weekly outlook.** Eight rolling weeks, each expandable into the payments that make up its
   cost. Week one carries everything already overdue, and an allowance is only counted as

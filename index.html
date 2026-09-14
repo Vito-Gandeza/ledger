@@ -16,25 +16,29 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <style>
 /* ============================================================
-   Design language: one accent colour, hairline borders, no card shadows.
-   Elevation comes from a surface change or a frosted blur, never a drop shadow.
-   Variable NAMES are unchanged from the previous theme on purpose — a few of them
-   are referenced from inline styles inside the render templates below.
+   One accent colour, hairline borders, and restrained elevation. Cards lift off the
+   canvas just enough to read as objects; nothing uses a heavy drop shadow.
+   Variable NAMES are load-bearing — several are referenced from inline styles in the
+   render templates below.
    ============================================================ */
 :root{
-  --bg:#f5f5f7; --fg:#1d1d1f; --fg2:#424245; --dim:#6e6e73;
-  --line:#d2d2d7; --line-soft:#e8e8ed; --card:#ffffff; --sunk:#f0f0f2;
+  --bg:#f2f2f5; --fg:#1d1d1f; --fg2:#424245; --dim:#6e6e73;
+  --line:#d8d8dd; --line-soft:#ebebef; --card:#ffffff; --sunk:#f6f6f8;
   --accent:#0066cc; --accent-hi:#0071e3; --on-accent:#ffffff;
   --good:#117a48; --warn:#9a530c; --bad:#c9332b;
   --r:18px; --r-md:12px; --r-sm:8px; --pill:9999px;
   --pad:clamp(16px,4.2vw,32px); --maxw:760px; --nav:52px;
   --ease:cubic-bezier(.22,1,.36,1);
+  --lift:0 1px 2px rgba(0,0,0,.04), 0 6px 16px -10px rgba(0,0,0,.14);
+  --lift-hi:0 1px 2px rgba(0,0,0,.05), 0 18px 40px -22px rgba(0,0,0,.28);
 }
 @media (prefers-color-scheme:dark){
   :root{ --bg:#000000; --fg:#f5f5f7; --fg2:#c7c7cc; --dim:#98989d;
          --line:#38383a; --line-soft:#2c2c2e; --card:#1c1c1e; --sunk:#2c2c2e;
          --accent:#2997ff; --accent-hi:#409cff;
-         --good:#30d158; --warn:#ff9f0a; --bad:#ff453a; }
+         --good:#30d158; --warn:#ff9f0a; --bad:#ff453a;
+         --lift:0 0 0 1px rgba(255,255,255,.04), 0 6px 18px -10px rgba(0,0,0,.8);
+         --lift-hi:0 0 0 1px rgba(255,255,255,.06), 0 20px 44px -24px rgba(0,0,0,1); }
 }
 
 *{box-sizing:border-box; margin:0; padding:0}
@@ -46,13 +50,12 @@ body{
   -webkit-tap-highlight-color:transparent; -webkit-font-smoothing:antialiased;
 }
 .wrap{max-width:var(--maxw); margin:0 auto;
-  padding:22px var(--pad) calc(env(safe-area-inset-bottom) + 72px);
+  padding:20px var(--pad) calc(env(safe-area-inset-bottom) + 72px);
   transition:max-width .3s var(--ease)}
 
 h2{font-size:21px; font-weight:600; line-height:1.19; letter-spacing:-.01em}
 h3{font-size:21px; font-weight:600; line-height:1.24; letter-spacing:-.02em}
 b,strong{font-weight:600}
-/* Small labels are sentence case and quiet — no uppercase tracking anywhere. */
 .eyebrow{font-size:13px; font-weight:600; letter-spacing:-.08px; color:var(--dim)}
 .num{font-variant-numeric:tabular-nums; letter-spacing:-.02em}
 .grow{flex:1 1 120px; min-width:0}
@@ -71,82 +74,100 @@ body.scrolled .topbar{border-bottom-color:var(--line)}
 .topbar .mk{font-weight:600; font-size:19px; letter-spacing:-.02em; margin-right:auto}
 body[data-state="empty"] .topbar{display:none}
 
-/* ---------- dashboard grid ---------- */
-/* grid-area names only mean something once grid-template-areas says where they are.
-   Without a BASE map, Chromium collapses every named child into one implicit cell —
-   that was the real cause of every section stacking on top of the others on mobile. */
-.dash{display:grid; gap:34px 26px; align-items:start; grid-template-columns:minmax(0,1fr);
-  grid-template-areas:"hero" "plan" "weekly" "wallets" "cards" "timeline" "loans" "log" "foot";}
-.dash > *{min-width:0}
-.a-hero{grid-area:hero} .a-plan{grid-area:plan} .a-timeline{grid-area:timeline} .a-weekly{grid-area:weekly}
-.a-wallets{grid-area:wallets} .a-cards{grid-area:cards} .a-loans{grid-area:loans}
-.a-log{grid-area:log} .a-foot{grid-area:foot}
+/* ---------- dashboard layout ----------
+   Two INDEPENDENT columns on desktop, not a row-based grid. A grid syncs the heights of
+   sections sitting in the same row, so a tall calendar next to a short card left a block
+   of dead space under the short one — and expanding a week pushed unrelated sections
+   around. Each column is its own flex stack, so nothing outside it moves.
+   On mobile the wrappers dissolve with display:contents and every section becomes a
+   direct child of the single-column stack, in DOM order. */
+.dash{display:flex; flex-direction:column; gap:28px}
+.dash > *, .col > *{min-width:0}
+.col{display:contents}
+@media (max-width:1079px){
+  .a-hero{order:0} .a-plan{order:1} .a-weekly{order:2} .a-wallets{order:3}
+  .a-cards{order:4} .a-timeline{order:5} .a-loans{order:6} .a-log{order:7} .a-foot{order:8}
+}
 @media (min-width:1080px){
-  :root{--maxw:1240px}
-  .dash{grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);
-    grid-template-areas:"hero hero" "plan timeline" "weekly timeline" "wallets timeline" "cards loans" "log log" "foot foot";}
+  :root{--maxw:1200px}
+  .dash{display:grid; gap:28px 26px; align-items:start;
+    grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}
+  .a-hero, .a-foot{grid-column:1 / -1}
+  .col{display:flex; flex-direction:column; gap:28px}
 }
-@media (min-width:1500px){
-  :root{--maxw:1580px}
-  .dash{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.95fr);
-    grid-template-areas:"hero hero hero" "plan wallets timeline" "weekly wallets timeline" "cards loans timeline" "log log timeline" "foot foot foot";}
-}
+@media (min-width:1500px){ :root{--maxw:1440px} }
 
 /* ---------- hero ---------- */
-header.a-hero{padding:14px 0 26px; border-bottom:1px solid var(--line)}
-.net{font-size:clamp(42px,12vw,56px); font-weight:600; line-height:1.05; letter-spacing:-.035em; margin:6px 0 24px}
-.split{display:grid; gap:20px 24px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
-.split .v{font-size:21px; font-weight:600; letter-spacing:-.02em; margin-top:3px}
-.alertbar{margin-top:20px; padding:13px 16px; border-radius:var(--r-md); font-size:15px; line-height:1.4;
-  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+/* The headline number sits on its own raised surface rather than loose on the canvas —
+   without it the most important figure on the page had the least visual weight. */
+.hero{background:var(--card); border:1px solid var(--line); border-radius:var(--r);
+  box-shadow:var(--lift-hi); padding:24px; position:relative; overflow:hidden}
+.hero::before{content:""; position:absolute; inset:0 0 auto 0; height:150px; pointer-events:none;
+  background:radial-gradient(120% 100% at 0% 0%, color-mix(in srgb,var(--accent) 12%,transparent), transparent 70%)}
+.hero > *{position:relative}
+.net{font-size:clamp(38px,10.5vw,52px); font-weight:600; line-height:1.05; letter-spacing:-.035em; margin:4px 0 20px}
+.split{display:grid; gap:16px 20px; grid-template-columns:repeat(auto-fit,minmax(138px,1fr));
+  border-top:1px solid var(--line-soft); padding-top:18px}
+.split .v{font-size:20px; font-weight:600; letter-spacing:-.02em; margin-top:2px}
+.alertbar{margin-top:18px; padding:13px 16px; border-radius:var(--r-md); font-size:15px; line-height:1.4;
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap; color:var(--fg);
   background:color-mix(in srgb, var(--bad) 12%, var(--card));
   border:1px solid color-mix(in srgb, var(--bad) 32%, transparent)}
-.alertbar, .alertbar.ok, .alertbar.bad{color:var(--fg)}
 .alertbar.ok{background:color-mix(in srgb, var(--accent) 10%, var(--card));
   border-color:color-mix(in srgb, var(--accent) 30%, transparent)}
 .alertbar + .alertbar{margin-top:10px}
 
-.shead{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:10px 14px; flex-wrap:wrap}
+.shead{display:flex; align-items:center; justify-content:space-between; margin-bottom:13px; gap:10px 14px; flex-wrap:wrap}
 .shead .acts{display:flex; gap:8px; align-items:center}
 
 /* ---------- surfaces ---------- */
-/* Own compositor layer per section, so a big innerHTML swap in one card cannot tear or
-   ghost against what iOS Safari already painted in a neighbour mid-scroll. */
-.card, .plan, header.a-hero{transform:translateZ(0); -webkit-backface-visibility:hidden}
-.card{background:var(--card); border:1px solid var(--line); border-radius:var(--r); overflow:hidden}
+/* Own compositor layer per card, so a big innerHTML swap in one cannot tear or ghost
+   against what iOS Safari already painted in a neighbour mid-scroll. */
+.card, .plan, .hero{transform:translateZ(0); -webkit-backface-visibility:hidden}
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--r);
+  overflow:hidden; box-shadow:var(--lift)}
 .row{display:flex; align-items:center; gap:3px 10px; flex-wrap:wrap;
      padding:13px 16px; border-bottom:1px solid var(--line-soft); transition:background .18s var(--ease)}
 .row:last-child{border-bottom:0}
 @media (hover:hover){ .row:hover{background:var(--sunk)} }
 .name{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:17px}
-.amt{white-space:nowrap; font-size:17px; flex:none}
-/* Actions collect in one box so they wrap to their own line together on a narrow phone
-   instead of shoving the balance off the row. */
+.amt{white-space:nowrap; font-size:17px; flex:none; font-weight:600}
 .rowacts{display:flex; align-items:center; gap:2px; margin-left:auto; flex:none}
-/* Coverage text can run to 2-3 lines on a phone: align to the top of that block. */
-.kid{padding-left:34px; background:var(--sunk); position:relative; align-items:flex-start}
-.kid .dot{margin-top:7px}
+.kid{padding-left:16px; background:var(--sunk); position:relative; align-items:flex-start}
 .kid .amt{margin-top:1px}
-.kid::before{content:""; position:absolute; left:19px; top:0; bottom:0; width:1px; background:var(--line)}
 .kid .name{font-size:16px}
 .head-row{background:var(--card)}
-/* A wallet's title carries an inline "main" chip; truncating the line clipped the chip. */
 .head-row .name{font-weight:600; white-space:normal; overflow:visible; text-overflow:clip}
 .empty{color:var(--dim); font-size:15px; padding:22px 16px}
 .mvs{display:flex; flex-direction:column; flex:none; margin-top:2px}
-.mvs .iconbtn{min-height:22px; min-width:22px; padding:0; font-size:10px}
+.mvs .iconbtn{min-height:22px; min-width:22px; padding:0; font-size:10px; color:var(--dim)}
+
+/* Tinted glyph disc — the pattern every money app uses to make a list scannable. */
+.ico{width:38px; height:38px; border-radius:var(--pill); flex:none; display:flex;
+  align-items:center; justify-content:center; font-size:15px; font-weight:600;
+  background:color-mix(in srgb, var(--accent) 12%, transparent); color:var(--accent)}
+.ico svg{width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:1.7;
+  stroke-linecap:round; stroke-linejoin:round}
+.kid .ico{width:32px; height:32px; font-size:13px}
+
+/* Envelope funding bar: how far this section's balance stretches down its schedule. */
+.cov{height:5px; border-radius:var(--pill); background:color-mix(in srgb,var(--fg) 9%,transparent);
+  overflow:hidden; margin:7px 0 2px; max-width:260px}
+.cov i{display:block; height:100%; background:var(--accent); transition:width .7s var(--ease)}
+.cov i.full{background:var(--good)}
+.cov i.none{background:var(--bad)}
 
 button,select,input{font:inherit; color:inherit; letter-spacing:inherit}
 button{background:none; border:0; cursor:pointer}
-/* Two button grammars only: a pill for anything that acts, a text link for anything quiet. */
 .btn{border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:var(--pill);
   padding:8px 16px; font-size:15px; font-weight:400; min-height:36px; white-space:nowrap;
   display:inline-flex; align-items:center; justify-content:center; gap:6px;
   transition:transform .16s var(--ease), background .16s, border-color .16s, opacity .16s}
 .btn:active{transform:scale(.95)}
 .btn:focus-visible{outline:2px solid var(--accent-hi); outline-offset:2px}
-.btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent)}
-.btn.ghost{border-color:transparent; background:none; color:var(--accent); padding:8px 10px}
+.btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent);
+  box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 18px -12px var(--accent)}
+.btn.ghost{border-color:transparent; background:none; color:var(--accent); padding:8px 10px; box-shadow:none}
 .btn.mini{padding:5px 12px; font-size:13px; min-height:30px}
 .btn.big{padding:12px 24px; font-size:17px; min-height:46px}
 .btn.bad{color:var(--bad)}
@@ -157,8 +178,6 @@ button{background:none; border:0; cursor:pointer}
 .iconbtn:active{transform:scale(.9)}
 .iconbtn:disabled{opacity:.22; cursor:default}
 .iconbtn:focus-visible{outline:2px solid var(--accent-hi); outline-offset:1px}
-/* Comfortable thumb targets on touch. The stacked reorder arrows are exempt: as a pair
-   they already occupy ~44px, and 44px each would make every section row 88px tall. */
 @media (max-width:767px){ .iconbtn{min-width:44px; min-height:40px} .mvs .iconbtn{min-width:22px; min-height:22px} }
 
 .dot{width:9px; height:9px; border-radius:var(--pill); flex:none}
@@ -178,7 +197,7 @@ button{background:none; border:0; cursor:pointer}
   min-height:0; padding:0; border:0; cursor:pointer}
 .seg span{display:block; text-align:center; font-size:13.5px; padding:6px 13px; border-radius:var(--pill);
   color:var(--fg2); white-space:nowrap; transition:background .2s var(--ease), color .2s}
-.seg input:checked + span{background:var(--card); color:var(--fg); font-weight:600}
+.seg input:checked + span{background:var(--card); color:var(--fg); font-weight:600; box-shadow:var(--lift)}
 .seg input:focus-visible + span{outline:2px solid var(--accent-hi); outline-offset:1px}
 
 /* ---------- inputs ---------- */
@@ -190,16 +209,12 @@ label{display:block; margin-bottom:16px}
 label .eyebrow{display:block; margin-bottom:6px}
 select.inline{width:auto; padding:7px 12px; font-size:13.5px; border-radius:var(--pill);
   min-height:34px; background:var(--sunk); border-color:var(--line-soft)}
-/* iOS zooms the page when a control under 16px takes focus, and these sit in section
-   headings — a stray tap there was zooming the whole dashboard. */
 @media (max-width:767px){ select.inline{font-size:16px; padding:6px 11px} }
 
 /* ---------- dialog ---------- */
 dialog{border:0; border-radius:20px; background:var(--card); color:var(--fg); padding:26px;
-  /* Explicit centering rather than the UA default — some WebKit builds (notably a
-     home-screen PWA) fail to auto-centre <dialog> and pin it top-left instead. */
   position:fixed; inset:0; margin:auto;
-  width:min(440px,calc(100vw - 32px)); max-height:86vh;
+  width:min(440px,calc(100vw - 32px)); max-height:86vh; box-shadow:var(--lift-hi);
   opacity:0; transform:translateY(12px) scale(.97);
   transition:opacity .26s var(--ease), transform .26s var(--ease), overlay .26s allow-discrete, display .26s allow-discrete}
 dialog[open]{opacity:1; transform:none}
@@ -213,19 +228,30 @@ dialog h3{margin-bottom:20px}
 .hint{font-size:13.5px; color:var(--dim); margin:-8px 0 16px; line-height:1.4}
 
 /* ---------- funding plan ---------- */
-.plan{border:1px solid var(--line); border-radius:var(--r); padding:20px; background:var(--card)}
-.plan .big{font-size:34px; font-weight:600; letter-spacing:-.03em; margin:4px 0; line-height:1.1}
+.plan{border:1px solid var(--line); border-radius:var(--r); padding:20px; background:var(--card); box-shadow:var(--lift)}
+.plan .big{font-size:32px; font-weight:600; letter-spacing:-.03em; margin:4px 0; line-height:1.1}
 .move{display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--line-soft); flex-wrap:wrap}
 .move:last-child{border-bottom:0}
 .bar{height:6px; background:var(--sunk); border-radius:var(--pill); overflow:hidden; margin-top:12px}
 .bar i{display:block; height:100%; background:var(--accent); transition:width .7s var(--ease)}
 .grp{padding:12px 0; border-bottom:1px solid var(--line-soft)}
 .grp:last-of-type{border-bottom:0}
-.grp .top{display:flex; align-items:center; gap:10px; font-size:16px; flex-wrap:wrap}
+.grp > summary.top{display:flex; align-items:center; gap:10px; font-size:16px; flex-wrap:wrap; cursor:pointer}
+@media (hover:hover){ .grp > summary.top:hover .grow{color:var(--accent)} }
 .grp .line{display:flex; gap:10px; font-size:13.5px; color:var(--dim); padding:5px 0 0 19px}
 .grand{display:flex; gap:10px; align-items:baseline; border-top:1px solid var(--line); margin-top:8px; padding-top:13px}
 
 /* ---------- weekly outlook ---------- */
+/* The projection chart is the one place the whole eight weeks can be read at a glance;
+   the rows below it are the detail behind each bar. */
+.wkchartwrap{padding:16px 16px 10px; border-bottom:1px solid var(--line-soft)}
+.wkchart{display:block; width:100%; height:78px}
+.wkchart rect.pos{fill:var(--accent)}
+.wkchart rect.neg{fill:var(--bad)}
+.wkchart rect.sel{opacity:1}
+.wkchart rect{opacity:.85}
+.wkchart line.zero{stroke:var(--line); stroke-width:1; vector-effect:non-scaling-stroke}
+.wkaxis{display:flex; justify-content:space-between; font-size:11.5px; color:var(--dim); padding-top:7px}
 .wkw{border-bottom:1px solid var(--line-soft)}
 .wkw:last-child{border-bottom:0}
 .wkw > summary{display:flex; align-items:center; gap:11px; padding:13px 16px; min-height:58px; cursor:pointer}
@@ -280,7 +306,7 @@ dialog h3{margin-bottom:20px}
 
 /* ---------- credit cards ---------- */
 .cardface{padding:20px; border-bottom:1px solid var(--line-soft)}
-.cardface .avail{font-size:34px; font-weight:600; letter-spacing:-.03em; margin:6px 0 2px; line-height:1.1}
+.cardface .avail{font-size:32px; font-weight:600; letter-spacing:-.03em; margin:6px 0 2px; line-height:1.1}
 .limitbar{height:8px; background:var(--sunk); border-radius:var(--pill); overflow:hidden; margin:15px 0 8px; display:flex}
 .limitbar i{display:block; height:100%; transition:width .7s var(--ease)}
 .limitbar .used{background:var(--accent)}
@@ -303,7 +329,9 @@ footer{border-top:1px solid var(--line); padding-top:22px; display:flex; gap:10p
 
 /* ---------- welcome ---------- */
 #welcome{max-width:520px; margin:10vh auto; text-align:center}
-#welcome .mark{font-size:64px; font-weight:600; line-height:1; letter-spacing:-.05em; margin-bottom:20px}
+#welcome .mark{width:76px; height:76px; margin:0 auto 22px; border-radius:22px;
+  background:var(--accent); color:var(--on-accent); display:flex; align-items:center;
+  justify-content:center; font-size:38px; font-weight:600; box-shadow:var(--lift-hi)}
 #welcome h2{font-size:clamp(34px,9vw,44px); letter-spacing:-.028em; line-height:1.08}
 #welcome p{color:var(--dim); font-size:19px; line-height:1.42; margin:14px 0 30px}
 #welcome .wacts{display:flex; gap:11px; justify-content:center; flex-wrap:wrap}
@@ -313,15 +341,13 @@ body[data-state="ready"] #welcome{display:none}
 
 /* ---------- motion ---------- */
 @keyframes rise{from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none}}
-body.boot .dash > *{animation:rise .6s var(--ease) backwards}
-body.boot .dash > *:nth-child(1){animation-delay:.02s}
-body.boot .dash > *:nth-child(2){animation-delay:.08s}
-body.boot .dash > *:nth-child(3){animation-delay:.14s}
-body.boot .dash > *:nth-child(4){animation-delay:.20s}
-body.boot .dash > *:nth-child(5){animation-delay:.26s}
-body.boot .dash > *:nth-child(6){animation-delay:.32s}
-body.boot .dash > *:nth-child(7){animation-delay:.38s}
-body.boot .dash > *:nth-child(8){animation-delay:.44s}
+body.boot .dash > *:not(:where(.col)), body.boot .col > *{animation:rise .6s var(--ease) backwards}
+body.boot .a-hero{animation-delay:.02s}
+body.boot .a-plan{animation-delay:.09s}
+body.boot .a-weekly{animation-delay:.16s}
+body.boot .a-wallets{animation-delay:.22s}
+body.boot .a-cards, body.boot .a-timeline{animation-delay:.28s}
+body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
 #welcome{animation:rise .7s var(--ease) backwards .1s}
 ::view-transition-old(root),::view-transition-new(root){animation-duration:.26s; animation-timing-function:var(--ease)}
 @media (prefers-reduced-motion:reduce){
@@ -355,7 +381,8 @@ body.boot .dash > *:nth-child(8){animation-delay:.44s}
 </div>
 
 <div class="dash">
-  <header class="a-hero">
+
+  <header class="a-hero hero">
     <div class="eyebrow">Net position</div>
     <div class="net num" id="net">&#8369;0</div>
     <div class="split">
@@ -367,51 +394,55 @@ body.boot .dash > *:nth-child(8){animation-delay:.44s}
     <div id="alert"></div>
   </header>
 
-  <section class="a-plan">
-    <div class="shead"><h2>Fund the envelopes</h2>
-      <div class="seg" id="horizon">
-        <label><input type="radio" name="hz" value="7"><span>7d</span></label>
-        <label><input type="radio" name="hz" value="14" checked><span>14d</span></label>
-        <label><input type="radio" name="hz" value="30"><span>30d</span></label>
-        <label><input type="radio" name="hz" value="9999"><span>All</span></label>
+  <div class="col col-a">
+    <section class="a-plan">
+      <div class="shead"><h2>Fund the envelopes</h2>
+        <div class="seg" id="horizon">
+          <label><input type="radio" name="hz" value="7"><span>7d</span></label>
+          <label><input type="radio" name="hz" value="14" checked><span>14d</span></label>
+          <label><input type="radio" name="hz" value="30"><span>30d</span></label>
+          <label><input type="radio" name="hz" value="9999"><span>All</span></label>
+        </div>
       </div>
-    </div>
-    <div class="plan" id="plan"></div>
-  </section>
+      <div class="plan" id="plan"></div>
+    </section>
 
-  <section class="a-weekly">
-    <div class="shead"><h2>Weekly outlook</h2><span class="sub" id="wkNote"></span></div>
-    <div class="card" id="weekly"></div>
-  </section>
+    <section class="a-wallets">
+      <div class="shead"><h2>Wallets</h2>
+        <div class="acts"><button class="btn ghost" id="moveBtn">Move money</button><button class="btn" id="addAcc">+ Section</button></div>
+      </div>
+      <div class="card" id="accounts"></div>
+    </section>
 
-  <section class="a-wallets">
-    <div class="shead"><h2>Wallets</h2>
-      <div class="acts"><button class="btn ghost" id="moveBtn">Move money</button><button class="btn" id="addAcc">+ Section</button></div>
-    </div>
-    <div class="card" id="accounts"></div>
-  </section>
+    <section class="a-cards" id="cardsWrap">
+      <div class="shead"><h2>Cards</h2>
+        <div class="acts"><button class="btn ghost" id="addCard">+ Card</button><button class="btn" id="addPurchase">+ Purchase</button></div>
+      </div>
+      <div id="cards"></div>
+    </section>
 
-  <section class="a-cards" id="cardsWrap">
-    <div class="shead"><h2>Cards</h2>
-      <div class="acts"><button class="btn ghost" id="addCard">+ Card</button><button class="btn" id="addPurchase">+ Purchase</button></div>
-    </div>
-    <div id="cards"></div>
-  </section>
+    <section class="a-loans">
+      <div class="shead"><h2>Instalment loans</h2><button class="btn" id="addLoan">+ Loan</button></div>
+      <div class="card" id="loans"></div>
+    </section>
+  </div>
 
-  <section class="a-timeline">
-    <div class="shead"><h2>Payment timeline</h2><select id="tlFilter" class="inline"></select></div>
-    <div class="card" id="timeline"></div>
-  </section>
+  <div class="col col-b">
+    <section class="a-weekly">
+      <div class="shead"><h2>Weekly outlook</h2><span class="sub" id="wkNote"></span></div>
+      <div class="card" id="weekly"></div>
+    </section>
 
-  <section class="a-loans">
-    <div class="shead"><h2>Instalment loans</h2><button class="btn" id="addLoan">+ Loan</button></div>
-    <div class="card" id="loans"></div>
-  </section>
+    <section class="a-timeline">
+      <div class="shead"><h2>Payment timeline</h2><select id="tlFilter" class="inline"></select></div>
+      <div class="card" id="timeline"></div>
+    </section>
 
-  <section class="a-log">
-    <div class="shead"><h2>Activity</h2><button class="btn ghost" id="clearLog">Clear</button></div>
-    <div class="card" id="log"></div>
-  </section>
+    <section class="a-log">
+      <div class="shead"><h2>Activity</h2><button class="btn ghost" id="clearLog">Clear</button></div>
+      <div class="card" id="log"></div>
+    </section>
+  </div>
 
   <footer class="a-foot">
     <button class="btn" id="exportBtn">Export backup</button>
@@ -616,18 +647,24 @@ const rpc = (fn, body) => fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
   body: JSON.stringify(body),
 }).then(r=>{ if(!r.ok) throw new Error("sync request failed ("+r.status+")"); return r.json(); });
 
-let syncTimer = null, syncing = false, lastPulledAt = null;
+let syncTimer = null;
+// Nothing may be pushed until the boot pull has settled. render() runs the moment the
+// script does, which queued a push of whatever this device had in localStorage 1200ms
+// later — and on a connection slower than that, the push landed FIRST and overwrote
+// newer cloud data with this device's stale copy. That is how a section added or edited
+// on one device would silently vanish everywhere: last-write-wins, and the stale device
+// happened to write last. The push now waits for the pull it was racing.
+let syncReady = false;
 function setSyncNote(t){ const el = $("#syncNote"); if(el) el.textContent = t; }
 
 async function pushCloud(){
   const code = syncCode(); if(!code) return;
-  syncing = true; setSyncNote("Syncing…");
+  setSyncNote("Syncing…");
   try{
     const stamp = await rpc("ledger_push", { p_code:code, p_data:S });
     localStorage.setItem("syncStamp", stamp);
     setSyncNote("Synced just now");
   } catch(e){ console.warn(e); setSyncNote("Sync failed — will retry"); }
-  syncing = false;
 }
 // Waits for a clean, settled frame before a big DOM rewrite lands — mutating mid
 // momentum-scroll is what was producing the smeared/ghosted text on iPhone.
@@ -637,21 +674,32 @@ const renderNextFrame = ()=> requestAnimationFrame(()=> requestAnimationFrame(re
 // adopt the cloud copy. Simple last-write-wins — fine for one person's own devices,
 // not built for two people editing the same code at the same moment.
 async function bootSync(){
-  const code = syncCode(); if(!code) return;
+  const code = syncCode(); if(!code){ syncReady = true; return; }
   setSyncNote("Checking sync…");
+  // Anything edited while the pull is in flight still has to reach the cloud, but a boot
+  // that changed nothing must not write: a pointless push bumps updated_at and makes
+  // every other device think it is behind.
+  const atBoot = JSON.stringify(S);
+  let adopted = false;
   try{
     const row = await pullCloud(code);
     if(row && row.updated_at !== localStorage.getItem("syncStamp")){
       S = migrate(row.data); localStorage.setItem("syncStamp", row.updated_at);
-      logIt("Synced newer data from another device"); renderNextFrame(); return;
+      logIt("Synced newer data from another device"); adopted = true;
+    } else if(!row){
+      await pushCloud(); // brand-new code with nothing on it yet
     }
-    if(!row) await pushCloud();
   } catch(e){ console.warn("sync check failed", e); }
-  setSyncNote(syncCode() ? "Synced across your devices" : "Stored only in this browser");
+  // Set even when the pull failed, or an offline start would block syncing for the
+  // whole session.
+  syncReady = true;
+  if(adopted) return renderNextFrame();
+  setSyncNote("Synced across your devices");
+  if(JSON.stringify(S) !== atBoot) queuePush();
 }
 // Debounced: typing several edits in a row should send one request, not one per keystroke.
 function queuePush(){
-  if(!syncCode()) return;
+  if(!syncCode() || !syncReady) return;
   clearTimeout(syncTimer);
   syncTimer = setTimeout(pushCloud, 1200);
 }
@@ -669,11 +717,11 @@ async function setupSync(){
     if(has && d.code===has) return; // unchanged
     let code = (d.code||"").trim();
     if(code && !/^[0-9a-f-]{36}$/i.test(code)) return alert("That does not look like a sync code.");
-    if(!code){ code = crypto.randomUUID(); localStorage.setItem("syncCode", code); await pushCloud(); return renderSyncBtn(); }
+    if(!code){ code = crypto.randomUUID(); localStorage.setItem("syncCode", code); syncReady = true; await pushCloud(); return renderSyncBtn(); }
     setSyncNote("Connecting…");
     try{
       const row = await pullCloud(code);
-      localStorage.setItem("syncCode", code);
+      localStorage.setItem("syncCode", code); syncReady = true;
       if(row){ localStorage.setItem("syncStamp", row.updated_at);
         S = migrate(row.data); logIt("Pulled data from sync"); renderNextFrame(); }
       else await pushCloud(); // brand-new code with nothing on it yet: seed it with what's here
@@ -865,11 +913,28 @@ function tween(el, to){
   requestAnimationFrame(step);
 }
 
+// A tinted disc per wallet: a list of same-looking rows is the hardest thing to scan.
+const KIND_ICON = {
+  gotyme: `<svg viewBox="0 0 24 24"><path d="M3 9.5 12 4l9 5.5"/><path d="M5 10v8m4-8v8m6-8v8m4-8v8"/><path d="M3 20h18"/></svg>`,
+  gcash:  `<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M16 12.5h2.5"/></svg>`,
+  cash:   `<svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="12" cy="12" r="2.6"/></svg>`,
+};
+// How much of everything still owed on this envelope's loan its balance already covers.
+function covBar(env){
+  const L = loan(env.loanId); if(!L) return "";
+  const left = unpaid(L); if(!left.length) return "";
+  const total = r2(left.reduce((s,i)=>s+i.amount,0));
+  const pct = total > 0 ? Math.min(100, Math.max(0, env.bal / total * 100)) : 100;
+  const cls = pct >= 100 ? "full" : pct <= 0 ? "none" : "";
+  return `<div class="cov"><i class="${cls}" style="width:${pct.toFixed(1)}%"></i></div>`;
+}
+
 function renderAccounts(){
   const m = mainAcc();
   $("#accounts").innerHTML = parents().map(p=>{
     const kids = kidsOf(p.id);
     const head = `<div class="row head-row">
+        <span class="ico">${KIND_ICON[p.kind] || KIND_ICON.gotyme}</span>
         <div class="grow"><div class="name">${esc(p.name)}${p.id===m?.id?` <span class="pill">main</span>`:""}</div>
           <div class="sub">${kids.length? `wallet ${money(p.bal)} · group ${money(groupTotal(p))}`
                                         : ({cash:"Physical cash",gcash:"E-wallet",gotyme:"Bank"})[p.kind]}</div></div>
@@ -888,8 +953,8 @@ function renderAccounts(){
           <button class="iconbtn" data-mv="${k.id}:-1" aria-label="Move up" ${i===0?"disabled":""}>▲</button>
           <button class="iconbtn" data-mv="${k.id}:1" aria-label="Move down" ${i===kids.length-1?"disabled":""}>▼</button>
         </div>
-        ${L?`<span class="dot" style="background:${colorOf(L)}"></span>`:""}
-        <div class="grow"><div class="name">${esc(k.name)}</div><div class="sub">${note}</div></div>
+        <span class="ico" style="${L?`background:color-mix(in srgb,${colorOf(L)} 20%,transparent);color:${colorOf(L)}`:""}">${esc(k.name.trim()[0] || "?").toUpperCase()}</span>
+        <div class="grow"><div class="name">${esc(k.name)}</div><div class="sub">${note}</div>${covBar(k)}</div>
         <div class="amt num">${money(k.bal)}</div>
         <div class="rowacts">
           ${k.loanId==="income"?"":`<button class="btn mini" data-fund="${k.id}">Fund</button>`}
@@ -1027,14 +1092,16 @@ function renderPlan(){
   if(byLoan.size) html += `<div class="eyebrow" style="margin:18px 0 2px">Covering</div>`
     + [...byLoan.values()].map(g=>{
       const sub = r2(g.its.reduce((s,i)=>s+i.amount,0));
-      return `<div class="grp">
-        <div class="top"><span class="dot" style="background:${colorOf(g.L)}"></span>
-          <span class="grow">${esc(g.L.label)}</span>
+      const late = g.its.filter(i=>daysTo(i.due)<0).length;
+      return `<details class="grp">
+        <summary class="top"><span class="chev">&rsaquo;</span>
+          <span class="dot" style="background:${colorOf(g.L)}"></span>
+          <span class="grow">${esc(g.L.label)}${late?` <span class="bad" style="font-size:13px">· ${late} late</span>`:""}</span>
           <span class="cnt">×${g.its.length}</span>
-          <span class="num"><b>${money(sub)}</b></span></div>
+          <span class="num"><b>${money(sub)}</b></span></summary>
         ${g.its.map(i=>`<div class="line"><span class="grow">${niceY(i.due)}${daysTo(i.due)<0?' <b class="bad">late</b>':""}</span>
           <span class="num">${money(i.amount)}</span></div>`).join("")}
-      </div>`;
+      </details>`;
     }).join("")
     + `<div class="grand"><span class="grow eyebrow">Grand total · ${list.length} payments</span>
         <span class="num" style="font-size:18px">${money(need)}</span></div>`;
@@ -1095,11 +1162,41 @@ function weeklyOutlook(weeks){
 }
 
 const WK_WEEKS = 8;
+
+// Eight weeks of closing balance as one column chart. Everything else in this app is a
+// list of numbers; the shape of the next two months is the one thing a list cannot show.
+// preserveAspectRatio="none" lets it stretch to any card width, so the zero line needs
+// non-scaling-stroke (set in CSS) to stay 1px.
+function weeklyChart(rows){
+  const W = 100, H = 40, n = rows.length || 1;
+  const vals = rows.map(r => r.bal);
+  const hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
+  const span = (hi - lo) || 1;
+  const zero = H * (hi / span);            // y of the zero line
+  const bw = W / n;
+  const bars = rows.map((r,i) => {
+    const h = Math.abs(H * (r.bal / span));
+    const y = r.bal >= 0 ? zero - h : zero;
+    return `<rect x="${(i*bw + bw*.2).toFixed(2)}" y="${y.toFixed(2)}"
+      width="${(bw*.6).toFixed(2)}" height="${Math.max(h,.5).toFixed(2)}"
+      class="${r.bal < 0 ? "neg" : "pos"}${i===0?" sel":""}"></rect>`;
+  }).join("");
+  return `<div class="wkchartwrap">
+    <svg class="wkchart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+      aria-label="Projected balance for the next ${n} weeks">
+      ${bars}<line class="zero" x1="0" y1="${zero.toFixed(2)}" x2="${W}" y2="${zero.toFixed(2)}"/>
+    </svg>
+    <div class="wkaxis"><span>${nice(rows[0].wStart)}</span>
+      <span class="${lo<0?"bad":""}">low ${money(lo)}</span>
+      <span>${nice(rows[rows.length-1].wEnd)}</span></div>
+  </div>`;
+}
+
 function renderWeekly(){
   const box = $("#weekly");
   // A re-render rebuilds the markup, so carry over which weeks the user had expanded.
   // First paint opens this week only.
-  const wasOpen = [...box.querySelectorAll("details")].map(d=>d.open);
+  const wasOpen = [...box.querySelectorAll("details.wkw")].map(d=>d.open);
   const rows = weeklyOutlook(WK_WEEKS);
 
   const note = $("#wkNote");
@@ -1109,7 +1206,7 @@ function renderWeekly(){
       ? `${money(S.allowance.amount)} every ${WEEKDAYS[S.allowance.weekday]} · <span class="ok">this week claimed</span>`
       : `${money(S.allowance.amount)} every ${WEEKDAYS[S.allowance.weekday]} · <span class="warn">this week not claimed yet</span>`;
 
-  box.innerHTML = rows.map((r,i)=>{
+  box.innerHTML = weeklyChart(rows) + rows.map((r,i)=>{
     const label = i===0 ? "This week" : i===1 ? "Next week" : `In ${i} weeks`;
     const dueTxt = r.obligations
       ? `<span class="${r.overdue?"bad":""}">${money(r.obligations)} due${r.overdue?` · ${r.overdue} overdue`:""}</span>`
@@ -1250,9 +1347,20 @@ function ask(title, fields, onOk){
     return `<label><span class="eyebrow">${x.label}</span><input name="${x.name}" type="${x.type||"text"}"
       ${x.type==="number"?'step="0.01" inputmode="decimal"':""} value="${esc(x.value??"")}" ${x.required?"required":""}></label>`;
   }).join("") + `<div class="dact">
-      ${fields.del?`<button value="del" class="btn ghost bad" style="margin-right:auto">Delete</button>`:""}
-      <button value="cancel" class="btn" formnovalidate>Cancel</button><button value="ok" class="btn primary">Save</button></div>`;
+      ${fields.del?`<button type="button" id="dlgDel" class="btn ghost bad" style="margin-right:auto">Delete</button>`:""}
+      <button type="button" id="dlgCancel" class="btn">Cancel</button><button value="ok" class="btn primary">Save</button></div>`;
   $("#dlg").showModal();
+  // Save is deliberately the only submit button left, so a browser's implicit submission
+  // (Enter, or an on-screen keyboard's Go key) does the expected thing and still runs
+  // required-field validation.
+  f.querySelector("#dlgCancel").onclick = () => $("#dlg").close("cancel");
+  const del = f.querySelector("#dlgDel");
+  if(del) del.onclick = () => {
+    if(!confirm(typeof fields.del === "string" ? fields.del : "Delete this? It cannot be undone.")) return;
+    const data = Object.fromEntries(new FormData(f));
+    $("#dlg").close("del");
+    setTimeout(()=>onOk("del", data), 0);
+  };
   f.onsubmit = () => { const data = Object.fromEntries(new FormData(f));
     setTimeout(()=>onOk($("#dlg").returnValue, data),0); };
 }
@@ -1374,9 +1482,9 @@ document.body.addEventListener("click", e=>{
       {name:"limit",label:"Credit limit",type:"number",value:L.limit},
       {name:"sDay",label:"Billed on day",type:"number",value:L.sDay},
       {name:"dDay",label:"Due on day",type:"number",value:L.dDay}];
-    f.del = true;
+    f.del = `Delete ${L.label} and every purchase on it?`;
     ask("Edit "+L.label, f, (v,d)=>{
-      if(v==="del"){ if(!confirm(`Delete ${L.label} and every purchase on it?`)) return;
+      if(v==="del"){
         S.loans = S.loans.filter(x=>x.id!==L.id);
         S.accounts.forEach(a=>{ if(a.loanId===L.id) a.loanId=""; });
         return render(); }
@@ -1388,7 +1496,7 @@ document.body.addEventListener("click", e=>{
     const [L,pid] = pickCard("editPur"), p = L.purchases.find(x=>x.id===pid);
     const f = [{name:"label",label:"What",value:p.label},{name:"amount",label:"Amount",type:"number",value:p.amount},
                {name:"date",label:"Date",type:"date",value:p.date}];
-    f.del = true;
+    f.del = `Delete the purchase "${p.label}" for ${money(p.amount)}?`;
     ask("Edit purchase", f, (v,d)=>{
       if(v==="del"){ L.purchases = L.purchases.filter(x=>x.id!==pid); rebuildCard(L); return render(); }
       if(v!=="ok") return;
@@ -1436,10 +1544,11 @@ document.body.addEventListener("click", e=>{
       {name:"aday",label:"Allowance day",type:"select",value:S.allowance?.weekday ?? "",
         options:[{v:"",t:"— not scheduled —"},...WEEKDAYS.map((w,i)=>({v:i,t:"Every "+w}))]},
       {name:"aamt",label:"Allowance amount",type:"number",value:S.allowance?.amount ?? ""});
-    f.del = true;
+    f.del = kids.length
+      ? `Delete ${a.name} and its ${kids.length} section${kids.length>1?"s":""}? This cannot be undone.`
+      : `Delete ${a.name}? Its ${money(a.bal)} balance goes with it and this cannot be undone.`;
     ask("Edit "+a.name, f, (v,d)=>{
       if(v==="del"){
-        if(kids.length && !confirm(`${a.name} has ${kids.length} section(s). Delete them too?`)) return;
         S.accounts = S.accounts.filter(x=>x.id!==a.id && x.parent!==a.id);
         logIt(`Removed ${a.name}`); return render();
       }
@@ -1493,7 +1602,7 @@ document.body.addEventListener("click", e=>{
   if(t.dataset.editInst){
     const [L,i] = pick("editInst"), it = L.items[i];
     const f = [{name:"due",label:"Due date",type:"date",value:it.due},{name:"amount",label:"Amount",type:"number",value:it.amount}];
-    f.del = true;
+    f.del = `Delete the ${money(it.amount)} instalment due ${niceY(it.due)}?`;
     ask("Edit instalment", f, (v,d)=>{
       if(v==="del"){ L.items.splice(i,1); return render(); }
       if(v!=="ok") return;
