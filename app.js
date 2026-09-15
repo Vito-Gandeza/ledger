@@ -178,13 +178,15 @@ $("#addOwed").onclick = ()=>{
 const wishFields = w => [
   {name:"name",label:"What is it",value:w?.name ?? "",required:1},
   {name:"cost",label:"How much does it cost",type:"number",value:w?.cost ?? "",required:1},
+  {name:"helpPct",label:"Someone else is covering (%)",type:"number",value:w?.helpPct ?? "0"},
   {name:"bd",label:"Colour and logo",type:"brand",value:{brand:w?.brand, logo:w?.logo, fallback:"#0066cc"}},
 ];
 $("#addWish").onclick = ()=>{
   const f = wishFields(null);
-  f.hint = "Progress is measured against everything across all your wallets.";
+  f.hint = "Progress is measured against everything across all your wallets. If somebody else is putting in part of the price, say what share and only the rest counts as yours to find.";
   ask("Add to the wishlist", f, (v,d)=>{ if(v!=="ok") return;
-    S.wish.push({id:uid(), name:d.name, cost:r2(d.cost), brand:d.bd_brand||"", logo:d.bd_logo||""});
+    S.wish.push({id:uid(), name:d.name, cost:r2(d.cost), helpPct:r2(d.helpPct)||0,
+                 brand:d.bd_brand||"", logo:d.bd_logo||""});
     logIt(`Added ${d.name} to the wishlist`); render(); });
 };
 
@@ -327,7 +329,8 @@ document.body.addEventListener("click", e=>{
     ask("Edit "+w.name, f, (v,d)=>{
       if(v==="del"){ S.wish = S.wish.filter(x=>x.id!==w.id); logIt(`Removed ${w.name} from the wishlist`); return render(); }
       if(v!=="ok") return;
-      w.name=d.name; w.cost=r2(d.cost); w.brand=d.bd_brand||""; w.logo=d.bd_logo||"";
+      w.name=d.name; w.cost=r2(d.cost); w.helpPct=r2(d.helpPct)||0;
+      w.brand=d.bd_brand||""; w.logo=d.bd_logo||"";
       render(); });
   }
   if(t.dataset.addKid) addSection(t.dataset.addKid);
@@ -939,6 +942,24 @@ function demo(){
   // 2500 to find, 1000 a week: 1500 still needed with the debt counted, 2500 without —
   // two weeks becomes one, which is the whole point of the mode.
   ok(wishProgress(S.wish[0], savingRate()).left === 1000, "the gap shrinks by what you are owed");
+  // --- somebody else covering part of the price ---
+  const helped = {id:"h", name:"Thing", cost:10000, helpPct:40, brand:"", logo:""};
+  ok(wishTarget(helped)===6000, "40% covered leaves 6000 to find", wishTarget(helped));
+  ok(wishProgress(helped, 1000, 3000).left===3000, "the gap is measured against the target, not the price");
+  ok(Math.round(wishProgress(helped, 1000, 3000).pct)===50, "so is the ring", wishProgress(helped,1000,3000).pct);
+  ok(wishProgress(helped, 1000, 3000).covered===4000, "what somebody else puts in is reported");
+  ok(wishProgress(helped, 1000, 6000).left===0 && wishProgress(helped,1000,6000).weeks===0,
+     "reaching the target is enough — the rest is not yours to find");
+  ok(wishTarget({cost:10000, helpPct:100})===0, "fully covered needs nothing");
+  ok(wishProgress({id:"z",name:"z",cost:10000,helpPct:100}, 1000, 0).pct===100, "and reads as complete, not NaN");
+  ok(wishTarget({cost:10000, helpPct:0})===10000, "no help means the whole price");
+  ok(wishTarget({cost:10000})===10000, "a wish from before this existed is uncovered");
+  ok(wishTarget({cost:10000, helpPct:-50})===10000 && wishTarget({cost:10000, helpPct:150})===0,
+     "a nonsense percentage is clamped rather than inverting the target");
+  ok(migrate({accounts:[],loans:[],log:[],owed:[],people:[],
+     wish:[{id:"w",name:"x",cost:100,helpPct:"25"}]}).wish[0].helpPct===25, "a string percentage is coerced");
+  ok(migrate({accounts:[],loans:[],log:[],owed:[],people:[],
+     wish:[{id:"w",name:"x",cost:100,helpPct:999}]}).wish[0].helpPct===100, "and clamped on the way in");
   ok(wishProgress(S.wish[0], savingRate()).weeks === 1
      && wishProgress(S.wish[0], savingRate(), offPot).weeks === 2,
      "assuming payment brings the date forward",

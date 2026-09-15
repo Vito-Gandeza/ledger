@@ -632,13 +632,18 @@ function weeksToAfford(gap, rate){
   if(!(rate > 0)) return null;
   return rows.length + Math.ceil((gap - run) / rate);
 }
+// What is actually yours to find: the price, less whatever somebody else is covering.
+const wishHelp   = w => Math.min(100, Math.max(0, r2(w.helpPct) || 0));
+const wishTarget = w => r2(r2(w.cost) * (1 - wishHelp(w) / 100));
 function wishProgress(w, rate, pot){
-  const saved = pot === undefined ? walletTotal() : r2(pot);
-  const cost  = r2(w.cost);
-  const left  = r2(Math.max(0, cost - saved));
-  const weeks = weeksToAfford(left, rate);
-  return { saved, cost, left,
-           pct: cost > 0 ? Math.min(100, Math.max(0, saved / cost * 100)) : 100,
+  const saved  = pot === undefined ? walletTotal() : r2(pot);
+  const cost   = r2(w.cost);
+  const help   = wishHelp(w);
+  const target = wishTarget(w);
+  const left   = r2(Math.max(0, target - saved));
+  const weeks  = weeksToAfford(left, rate);
+  return { saved, cost, help, target, covered: r2(cost - target), left,
+           pct: target > 0 ? Math.min(100, Math.max(0, saved / target * 100)) : 100,
            when: (weeks === null || weeks === 0) ? null : addDays(today(), weeks * 7),
            weeks };
 }
@@ -784,7 +789,9 @@ function renderWish(){
       </span>
       <div class="grow">
         <div class="name">${w.logo?brandMark(w,""):""}${esc(w.name)}</div>
-        <div class="sub">${money(p.cost)}${p.left>0?` · ${money(p.left)} to go`:""}</div>
+        <div class="sub">${money(p.target)}${p.help>0
+          ? ` <span class="ok">of ${money(p.cost)} &middot; ${p.help}% covered</span>` : ""}${
+          p.left>0?` &middot; ${money(p.left)} to go`:""}</div>
         <div class="sub">${when}</div>
       </div>
       <div class="rowacts">

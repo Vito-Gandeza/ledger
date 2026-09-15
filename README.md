@@ -35,7 +35,10 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
   have not been given yet is a figure that lies. Rates are never touched: a repayment is a
   one-off, not income that arrives every week.
 - **Wishlist.** Things you are saving for, each with a progress ring and a date you can
-  afford it by. Progress is measured against the total across every wallet. The date is found
+  afford it by. Progress is measured against the total across every wallet. If somebody else
+  is putting in part of the price, set the percentage they cover and only the rest counts as
+  yours to find — the ring, the date and the list total all follow that figure, not the
+  sticker price. The date is found
   by walking the projection week by week until the money is actually there, rather than
   dividing by an average — obligations are lumpy, and an average assumes you save the worst
   week's surplus every week. The headline rate excludes the overdue backlog, which is a

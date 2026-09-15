@@ -195,10 +195,12 @@ function migrate(s){
   }
   for(const o of s.owed){ delete o.who; delete o.due; }
 
-  // A wish can either track a real section's balance or hold a number you keep yourself.
+  // Progress on a wish is measured against every wallet, so it carries no balance of its
+  // own — only what it costs and what somebody else is putting toward it.
   s.wish = Array.isArray(s.wish) ? s.wish.filter(w => w && typeof w === "object" && w.id).map(w => ({
-    ...w, name:String(w.name ?? "Untitled"), cost:r2(w.cost), saved:r2(w.saved),
-    accId: typeof w.accId === "string" ? w.accId : "",
+    ...w, name:String(w.name ?? "Untitled"), cost:r2(w.cost),
+    // Clamped: a negative or over-100 figure would invert the target or turn it into a refund.
+    helpPct: Math.min(100, Math.max(0, r2(w.helpPct) || 0)),
     brand: typeof w.brand === "string" ? w.brand : "",
     logo:  typeof w.logo  === "string" ? w.logo  : "",
   })) : [];
