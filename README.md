@@ -12,9 +12,11 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
 - **Wallets with sections.** A main bank wallet holds named sub-sections ("envelopes") whose money
   the main wallet cannot spend until you move it. Reorderable. One section is marked the allowance
   pool — the place your income lands and every top-up is drawn from.
-- **Paid elsewhere.** Every instalment and statement has a one-tap "Paid" that records the
-  payment without moving any money, for when you paid in the lender's own app and update your
-  wallets by hand. The Pay dialog has the same choice as its first source.
+- **Balances are kept by hand.** The app never moves money between wallets. Tap any balance to
+  type the new figure — Enter or tapping away saves, Escape backs out, and an empty entry
+  changes nothing. Every instalment and statement is settled with a one-tap "Paid" that records
+  the payment and leaves the wallets alone; a card statement can also be marked part-paid, with
+  the rest carried to the next cycle.
 - **Loans from people, and what loans cost.** A loan can come from an app or a person. Give an
   app loan the amount you actually received and it shows the interest, the markup on top, and
   an effective yearly rate — the markup alone hides time, and 16% over ten weeks is a very
@@ -26,7 +28,8 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
   statement/due day pair, so a purchase made after the cut-off correctly rolls to the next cycle.
   Partial payments carry the remainder forward.
 - **Fund the envelopes.** Given a window, it computes the per-envelope top-up needed, ordered by
-  which loan bites first, and applies the transfers in one click.
+  which loan bites first — a to-do list you work through in your bank app, then update the
+  balances here.
 - **How much of a card is yours.** Each card splits what is still to pay, and everything
   ever spent on it, into your part and everyone else's, using the debts linked to its
   purchases. Carried-forward remainders are left out of the all-time figure, since they are a

@@ -83,8 +83,7 @@ function paint(){
     alertHtml += `<div class="alertbar ok">
       <span class="grow">${on===today() ? "It&rsquo;s allowance day" : `Your ${WEEKDAYS[S.allowance.weekday]} allowance was due ${nice(on)}`}
         — is the ${money(S.allowance.amount)} already in ${esc(incomeAcc().name)}?</span>
-      <button class="btn mini primary" data-allowance-claimed>Yes, it&rsquo;s in</button>
-      <button class="btn mini" data-allowance-add>Add it for me</button></div>`;
+      <button class="btn mini primary" data-allowance-claimed>Yes, it&rsquo;s in</button></div>`;
   }
   $("#alert").innerHTML = alertHtml;
 
@@ -144,6 +143,11 @@ function covBar(env){
   return `<div class="cov"><i class="${cls}" style="width:${pct.toFixed(1)}%"></i></div>`;
 }
 
+// The balance is its own edit control. Balances are kept by hand, so changing one is the
+// most frequent edit in the app — it should be one tap on the number, not a dialog.
+const balBtn = a => `<button class="amt num balbtn" data-bal="${a.id}"
+  title="Tap to change" aria-label="${esc(a.name)} balance ${money(a.bal)}, tap to change">${money(a.bal)}</button>`;
+
 function renderAccounts(){
   const m = mainAcc();
   $("#accounts").innerHTML = parents().map(p=>{
@@ -154,9 +158,8 @@ function renderAccounts(){
         <div class="grow"><div class="name">${esc(p.name)}${p.id===m?.id?` <span class="pill">main</span>`:""}</div>
           <div class="sub">${kids.length? `wallet ${money(p.bal)} · group ${money(groupTotal(p))}`
                                         : ({cash:"Physical cash",gcash:"E-wallet",gotyme:"Bank"})[p.kind]}</div></div>
-        <div class="amt num">${money(p.bal)}</div>
+        ${balBtn(p)}
         <div class="rowacts">
-          <button class="iconbtn" data-xfer="${p.id}" title="Transfer" aria-label="Transfer">⇄</button>
           ${p.id===m?.id?`<button class="iconbtn" data-add-kid="${p.id}" title="Add section" aria-label="Add section">+</button>`:""}
           <button class="iconbtn" data-edit-acc="${p.id}" title="Edit" aria-label="Edit">Edit</button>
         </div>
@@ -175,10 +178,8 @@ function renderAccounts(){
         <span class="ico" style="background:color-mix(in srgb,${tint} 20%,transparent);color:${tint}">${
           k.logo ? brandMark(k,"") : esc(k.name.trim()[0] || "?").toUpperCase()}</span>
         <div class="grow"><div class="name">${esc(k.name)}</div><div class="sub">${note}</div>${covBar(k)}</div>
-        <div class="amt num">${money(k.bal)}</div>
+        ${balBtn(k)}
         <div class="rowacts">
-          ${k.loanId==="income"?"":`<button class="btn mini" data-fund="${k.id}">Fund</button>`}
-          <button class="iconbtn" data-xfer="${k.id}" title="Transfer" aria-label="Transfer">⇄</button>
           <button class="iconbtn" data-edit-acc="${k.id}" title="Edit" aria-label="Edit">Edit</button>
         </div>
       </div>`;
@@ -218,8 +219,8 @@ function renderCards(){
             <button class="iconbtn" data-edit-pur="${L.id}:${p.id}">edit</button></div>`; }).join("")}
         ${it.paid ? `<button class="btn mini" data-unpay-card="${L.id}:${it.due}" style="margin-top:9px">mark unpaid</button>`
                   : `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
-                      <button class="btn ${isOpen?"mini":"primary"}" data-pay-card="${L.id}:${it.due}">Pay ${money(it.amount)}</button>
-                      <button class="btn mini" data-mark-card="${L.id}:${it.due}" title="Already paid — mark it without moving any money">&#10003; Paid</button></div>`}
+                      <button class="btn ${isOpen?"mini":"primary"}" data-mark-card="${L.id}:${it.due}">&#10003; Paid ${money(it.amount)}</button>
+                      <button class="btn mini ghost" data-pay-card="${L.id}:${it.due}" title="Paid less than the statement — the rest carries to the next cycle">Paid part&hellip;</button></div>`}
       </div>`;
     };
 
@@ -314,7 +315,6 @@ function renderLoans(){
         <button class="btn mini" data-edit-loan="${L.id}">Edit</button>
         <button class="btn mini" data-link="${L.id}">${env?`⇄ ${esc(env.name)}`:"link a wallet"}</button>
         <button class="btn mini" data-extend="${L.id}">+ extend</button>
-        <button class="btn mini" data-del-loan="${L.id}">delete</button>
       </div>
       ${costBar}
       ${L.items.map((it,i)=>{
@@ -324,8 +324,7 @@ function renderLoans(){
           <span class="grow ${cl}">${niceY(it.due)}${it.partPaid?` <span class="sub">(${money(it.partPaid)} paid so far)</span>`:""}</span>
           <span class="num">${money(it.amount)}</span>
           ${it.paid?`<button class="iconbtn" data-unpay="${L.id}:${i}">undo</button>`
-                   :`<button class="btn mini" data-mark-paid="${L.id}:${i}" title="Already paid — mark it without moving any money">&#10003; Paid</button>
-                     <button class="btn mini" data-pay="${L.id}:${i}">Pay</button>`}
+                   :`<button class="btn mini" data-mark-paid="${L.id}:${i}">&#10003; Paid</button>`}
           <button class="iconbtn" data-edit-inst="${L.id}:${i}">edit</button>
         </div>`;}).join("")}
       </details>`;
@@ -352,7 +351,9 @@ function renderPlan(){
             <span class="grow" style="font-size:14px">${esc(r.env.name)}
               <span class="dim">has ${money(r.env.bal)}, needs ${money(r.need)}</span></span>
             <span class="num${r.give<r.gap?" warn":""}">${money(r.give)}</span></div>`).join("")
-        + `<button class="btn primary" id="doPlan" style="margin-top:14px">Apply transfers</button>`;
+        // A to-do list, not a button: the money moves in your bank app, and the new
+        // balances are a tap away in Wallets.
+        + `<p class="sub" style="margin-top:12px">Move these in your bank app, then tap each balance in Wallets to update it.</p>`;
       if(short>0) html += `<p class="bad" style="margin-top:12px">Short ${money(short)} — ${esc(srcs[0].name)} and the main wallet cannot cover every envelope.</p>`;
     }
     if(orphanNeed>0) html += `<p class="warn" style="margin-top:12px;font-size:13px">${money(orphanNeed)} due on loans with no envelope — pays straight from the main wallet.</p>`;
@@ -382,20 +383,6 @@ function renderPlan(){
         <span class="num" style="font-size:18px">${money(need)}</span></div>`;
 
   $("#plan").innerHTML = html;
-  const b = $("#doPlan");
-  if(b) b.onclick = ()=>{
-    for(const r of rows){
-      let want = r.give;
-      for(const s of srcs){
-        if(want<=0) break;
-        const take = r2(Math.min(s.bal, want));
-        if(take<=0) continue;
-        s.bal = r2(s.bal-take); r.env.bal = r2(r.env.bal+take); want = r2(want-take);
-        logIt(`Funded ${r.env.name} ${money(take)} from ${s.name}`);
-      }
-    }
-    render();
-  };
 }
 
 // Total assets today, carried forward week by week: minus everything due that week,
@@ -759,8 +746,7 @@ function renderCatch(){
             <div class="sub bad">${plural(-daysTo(it.due), "day")} late</div></div>
           <div class="amt num">${money(it.amount)}</div>
           <div class="rowacts">
-            <button class="btn mini" data-${isCard_?`mark-card="${g.L.id}:${it.due}`:`mark-paid="${g.L.id}:${i}`}" title="Already paid — mark it without moving any money">&#10003; Paid</button>
-            <button class="btn mini primary" data-${isCard_?`pay-card="${g.L.id}:${it.due}`:`pay="${g.L.id}:${i}`}">Pay</button>
+            <button class="btn mini primary" data-${isCard_?`mark-card="${g.L.id}:${it.due}`:`mark-paid="${g.L.id}:${i}`}">&#10003; Paid</button>
           </div>
         </div>`;
       }).join("");

@@ -66,14 +66,37 @@ function ask(title, fields, onOk){
   f.onsubmit = () => { const data = Object.fromEntries(new FormData(f));
     setTimeout(()=>onOk($("#dlg").returnValue, data),0); };
 }
-// Every wallet, plus an explicit "paid somewhere else": payments made in the lender's own
-// app, where the wallet balance is updated by hand and deducting here would count it twice.
-const payFromOptions = () => [{v:"",t:"— nowhere, I already paid it —"}, ...allAccOptions()];
 const loanOptions = () => [{v:"",t:"— not linked —"},{v:"income",t:"Allowance pool (money comes from here)"},
   ...S.loans.map(L=>({v:L.id,t:`${L.provider} · ${L.label}`}))];
-const allAccOptions = () => S.accounts.map(a=>({v:a.id,t:`${a.parent?acc(a.parent).name+" / ":""}${a.name} (${money(a.bal)})`}));
-const srcOptions = () => [incomeAcc(), mainAcc(), ...parents().filter(p=>p!==mainAcc())]
-  .filter((a,i,arr)=>a && arr.indexOf(a)===i).map(a=>({v:a.id,t:`${a.name} (${money(a.bal)})`}));
+
+// Balances are edited in place on the number itself. Enter or tapping away saves, Escape
+// backs out, and an empty or unreadable entry changes nothing rather than zeroing a wallet.
+function editBalance(btn){
+  const a = acc(btn.dataset.bal); if(!a) return;
+  const inp = document.createElement("input");
+  inp.type = "number"; inp.step = "0.01"; inp.inputMode = "decimal";
+  inp.className = "balin num"; inp.value = a.bal;
+  inp.setAttribute("aria-label", `New balance for ${a.name}`);
+  btn.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = keep => {
+    if(done) return; done = true;
+    const raw = inp.value.trim(), v = r2(raw);
+    if(keep && raw !== "" && Number.isFinite(Number(raw)) && v !== a.bal){
+      logIt(`${a.name}: ${money(a.bal)} → ${money(v)}`);
+      a.bal = v;
+      return render();
+    }
+    // Nothing changed: put the number back without redrawing the page. A redraw here would
+    // replace the very balance you tapped next, and that tap would be lost.
+    if(inp.isConnected) inp.replaceWith(btn);
+  };
+  inp.onkeydown = e => {
+    if(e.key === "Enter"){ e.preventDefault(); finish(true); }
+    else if(e.key === "Escape"){ e.preventDefault(); finish(false); }
+  };
+  inp.onblur = () => finish(true);
+}
 
 // ---------- welcome ----------
 $("#wStart").onclick = ()=>{ S = starter(); logIt("Started a new ledger"); render(); };
@@ -276,11 +299,13 @@ function reorder(id, dir){
 }
 
 document.body.addEventListener("click", e=>{
-  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-allowance-claimed],[data-allowance-add],[data-xfer],[data-day],[data-edit-wish],[data-edit-owed],[data-owed-settle],[data-edit-person],[data-mark-paid],[data-mark-card],[data-edit-loan],[data-owed-unsettle]");
+  const t = e.target.closest("[data-bal],[data-edit-acc],[data-add-kid],[data-mv],[data-unpay],[data-edit-inst],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-allowance-claimed],[data-day],[data-edit-wish],[data-edit-owed],[data-owed-settle],[data-edit-person],[data-mark-paid],[data-mark-card],[data-edit-loan],[data-owed-unsettle]");
   if(!t) return;
   const pick = k => { const [id,i] = (t.dataset[k]||"").split(":"); return [loan(id), +i]; };
   const pickCard = k => { const [id,key] = (t.dataset[k]||"").split(":"); return [loan(id), key]; };
   e.preventDefault();
+
+  if(t.dataset.bal) return editBalance(t);
 
   // Pick the funding wallet from the loan's own side. One wallet per loan, so linking moves it.
   if(t.dataset.link){
@@ -402,14 +427,14 @@ document.body.addEventListener("click", e=>{
   }
 
   if(t.dataset.payCard){
-    const [L,due] = pickCard("payCard"), it = L.items.find(i=>i.due===due), env = envelopeFor(L.id);
-    const f = [{name:"src",label:"From",type:"select",options:payFromOptions(),value:(env||mainAcc())?.id || ""},
-               {name:"amount",label:"Amount",type:"number",value:it.amount}];
-    f.hint = "Pay less than the statement and the rest carries to the next cycle.";
-    ask(`Pay ${L.label} · ${niceY(it.due)}`, f, (v,dd)=>{ if(v!=="ok") return;
-      const a = dd.src ? acc(dd.src) : null, amt = r2(dd.amount), rest = r2(it.amount - amt);
+    // Records a payment smaller than the statement; nothing is taken from any wallet, since
+    // balances are kept by hand. The remainder rolls into the next cycle as a purchase.
+    const [L,due] = pickCard("payCard"), it = L.items.find(i=>i.due===due);
+    const f = [{name:"amount",label:"How much you paid",type:"number",value:it.amount,required:1}];
+    f.hint = `The statement is ${money(it.amount)}. Whatever you did not pay carries to the next cycle.`;
+    ask(`Paid part of ${L.label} · ${niceY(it.due)}`, f, (v,dd)=>{ if(v!=="ok") return;
+      const amt = r2(dd.amount), rest = r2(it.amount - amt);
       if(!(amt > 0)) return;
-      if(a){ a.bal = r2(a.bal - amt); it.paidFrom = a.id; it.paidAmt = amt; }
       it.paid = true;
       if(rest > 0){
         const carryId = uid();
@@ -417,7 +442,7 @@ document.body.addEventListener("click", e=>{
         it.carryId = carryId;   // removed again if this payment is undone
         logIt(`${L.label}: ${money(rest)} carried to the next cycle`);
       }
-      logIt(`Paid ${L.label} ${money(amt)} ${a ? `from ${a.name}` : "(paid outside the app)"}`);
+      logIt(`Paid ${money(amt)} of ${L.label} ${niceY(it.due)}`);
       rebuildCard(L); render(); });
   }
   if(t.dataset.unpayCard){
@@ -450,7 +475,14 @@ document.body.addEventListener("click", e=>{
       {name:"ref",label:"Reference #",value:L.ref||""},
       principalField(L)];
     f.hint = `The schedule adds up to ${money(loanScheduled(L))}. Give what you actually received and the difference is the interest.`;
-    ask("Edit "+L.label, f, (v,d)=>{ if(v!=="ok") return;
+    f.del = `Delete ${L.provider} · ${L.label} and its whole schedule?`;
+    ask("Edit "+L.label, f, (v,d)=>{
+      if(v==="del"){
+        S.loans = S.loans.filter(x=>x.id!==L.id);
+        S.accounts.forEach(a=>{ if(a.loanId===L.id) a.loanId=""; });
+        logIt(`Deleted loan ${L.label}`); return render();
+      }
+      if(v!=="ok") return;
       L.fromPerson = d.lender === "person";
       L.provider = d.provider; L.label = d.label; L.ref = d.ref;
       L.principal = L.fromPerson ? 0 : (r2(d.principal)||0);
@@ -458,22 +490,10 @@ document.body.addEventListener("click", e=>{
     wireLoanDialog();
   }
 
-  if(t.dataset.fund){
-    const env = acc(t.dataset.fund), L = loan(env.loanId);
-    const gap = L ? r2(dues(horizon(), L).reduce((s,d)=>s+d.it.amount,0) - env.bal) : 0;
-    const f = [{name:"src",label:"Take from",type:"select",options:srcOptions(),value:incomeAcc()?.id},
-               {name:"amount",label:"Amount",type:"number",value:Math.max(0,gap) || "",required:1}];
-    f.hint = L ? `${env.name} holds ${money(env.bal)}. Suggested tops it up for the window.` : "";
-    ask(`Fund ${env.name}`, f, (v,d)=>{ if(v!=="ok") return;
-      const s = acc(d.src), amt = r2(d.amount);
-      s.bal = r2(s.bal-amt); env.bal = r2(env.bal+amt);
-      logIt(`Funded ${env.name} ${money(amt)} from ${s.name}`); render(); });
-  }
-
   if(t.dataset.editAcc){
     const a = acc(t.dataset.editAcc), kids = kidsOf(a.id), isAllowanceAcc = a.loanId==="income";
     const f = [{name:"name",label:"Name",value:a.name},
-               {name:"bal",label:"Balance (set to what the app shows)",type:"number",value:a.bal},
+               {name:"bal",label:"Balance",type:"number",value:a.bal},
                {name:"bd",label:"Colour and logo",type:"brand",
                 value:{brand:a.brand, logo:a.logo, fallback:brandOf(a)}}];
     if(a.parent) f.splice(1,0,{name:"loanId",label:"What it is for",type:"select",options:loanOptions(),value:a.loanId});
@@ -514,40 +534,8 @@ document.body.addEventListener("click", e=>{
     S.allowance.lastAdded = today();
     logIt(`Marked this week's allowance as received`); render();
   }
-  if(t.hasAttribute("data-allowance-add")){
-    const a = incomeAcc();
-    if(a && S.allowance){
-      a.bal = r2(a.bal + S.allowance.amount); S.allowance.lastAdded = today();
-      logIt(`Added weekly allowance ${money(S.allowance.amount)} to ${a.name}`); render();
-    }
-  }
-  if(t.dataset.xfer) openMove(t.dataset.xfer);
-
-  if(t.dataset.pay){
-    const [L,i] = pick("pay"), it = L.items[i], env = envelopeFor(L.id);
-    const f = [{name:"src",label:"From",type:"select",options:payFromOptions(),value:(env||mainAcc())?.id || ""},
-               {name:"amount",label:"Amount",type:"number",value:it.amount}];
-    f.hint = "Pay less than the instalment and the rest stays owed on this date.";
-    ask(`Pay ${L.label}`, f,
-      (v,dd)=>{ if(v!=="ok") return;
-        const a = dd.src ? acc(dd.src) : null, amt = r2(dd.amount);
-        if(!(amt > 0)) return;
-        if(a) a.bal = r2(a.bal - amt);
-        const from = a ? `from ${a.name}` : "(paid outside the app)";
-        if(amt < it.amount){
-          it.amount = r2(it.amount - amt); // still unpaid, just smaller
-          // Kept so the schedule's full cost, and so its interest, still adds up.
-          it.partPaid = r2((it.partPaid||0) + amt);
-          logIt(`Part-paid ${L.label} ${money(amt)} ${from} · ${money(it.amount)} still due ${nice(it.due)}`);
-        } else {
-          it.paid = true; it.amount = amt;
-          if(a){ it.paidFrom = a.id; it.paidAmt = amt; }   // so marking it unpaid can undo the money too
-          logIt(`Paid ${L.label} ${money(amt)} ${from}`);
-        }
-        render(); });
-  }
-  // Marking something unpaid used to restore the debt without returning the money, so the
-  // difference simply disappeared from the net position.
+  // Payments are recorded without touching wallets now, but anything paid through the old
+  // Pay flow still carries where its money came from, so undoing it still gives that back.
   if(t.dataset.unpay){
     const [L,i] = pick("unpay"), it = L.items[i];
     refund(it, `${L.label} ${niceY(it.due)}`);
@@ -572,30 +560,8 @@ document.body.addEventListener("click", e=>{
         const from = L.freq==="week" ? addDays(last.due,7) : L.freq==="2weeks" ? addDays(last.due,14) : addMonths(last.due,1);
         L.items.push(...gen(from, +d.count, L.freq, +d.amount)); render(); });
   }
-  if(t.dataset.delLoan){
-    const L = loan(t.dataset.delLoan);
-    if(confirm(`Delete ${L.provider} ${L.label} and its whole schedule?`)){
-      S.loans = S.loans.filter(x=>x.id!==L.id);
-      S.accounts.forEach(a=>{ if(a.loanId===L.id) a.loanId=""; });
-      logIt(`Deleted loan ${L.label}`); render(); }
-  }
 });
 
-// fromId preselects the source — every wallet/section gets its own transfer button that
-// calls this instead of just the one global "Move".
-function openMove(fromId){
-  ask("Move money",[
-    {name:"from",label:"From",type:"select",options:allAccOptions(),value:fromId||incomeAcc()?.id},
-    {name:"to",label:"To",type:"select",options:allAccOptions(),value:mainAcc()?.id},
-    {name:"amount",label:"Amount",type:"number",required:1}],
-    (v,d)=>{ if(v!=="ok"||d.from===d.to) return;
-      const a=acc(d.from), b=acc(d.to), amt=r2(d.amount);
-      // Only .bal is touched — parent, kind and loanId links survive a transfer untouched.
-      if(!a || !b || !(amt > 0)) return;
-      a.bal=r2(a.bal-amt); b.bal=r2(b.bal+amt);
-      logIt(`Moved ${money(amt)}: ${a.name} → ${b.name}`); render(); });
-}
-$("#moveBtn").onclick = ()=> openMove();
 
 $("#horizon").onchange = renderPlan;
 $("#tlFilter").onchange = renderTimeline;

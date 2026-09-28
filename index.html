@@ -141,6 +141,19 @@ body[data-state="empty"] .topbar{display:none}
 @media (hover:hover){ .row:hover{background:var(--sunk)} }
 .name{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:17px}
 .amt{white-space:nowrap; font-size:17px; flex:none; font-weight:600}
+/* A balance is its own edit control: it has to look tappable on a phone, where there is no
+   hover to hint at it, without looking like a button. A dotted underline does both. */
+.balbtn{border-radius:var(--r-sm); padding:3px 6px; margin:-3px -6px; cursor:text;
+  text-decoration:underline dotted color-mix(in srgb, var(--fg) 35%, transparent);
+  text-underline-offset:5px; text-decoration-thickness:1.5px;
+  transition:background .15s var(--ease)}
+@media (hover:hover){ .balbtn:hover{background:color-mix(in srgb, var(--accent) 12%, transparent)} }
+.balbtn:focus-visible{outline:2px solid var(--accent-hi); outline-offset:1px}
+/* 17px keeps iOS from zooming the page when it takes focus. */
+/* No wider than the number it replaces, or it wraps under the name on a phone; and right-
+   aligned if it ever does wrap, so it stays where the balance was. */
+.balin{width:112px; flex:none; margin-left:auto; text-align:right; font-weight:600; font-size:17px;
+  padding:6px 8px; min-height:38px; border-color:var(--accent-hi)}
 .rowacts{display:flex; align-items:center; gap:2px; margin-left:auto; flex:none}
 .kid{padding-left:16px; background:var(--sunk); position:relative; align-items:flex-start}
 .kid .amt{margin-top:1px}
@@ -538,7 +551,7 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
 
     <section class="a-wallets">
       <div class="shead"><h2>Wallets</h2>
-        <div class="acts"><button class="btn ghost" id="moveBtn">Move money</button><button class="btn" id="addAcc">+ Section</button></div>
+        <div class="acts"><span class="sub">Tap a balance to change it</span><button class="btn" id="addAcc">+ Section</button></div>
       </div>
       <div class="card" id="accounts"></div>
     </section>
