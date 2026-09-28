@@ -87,7 +87,7 @@ function paint(){
   }
   $("#alert").innerHTML = alertHtml;
 
-  renderAccounts(); renderCards(); renderLoans(); renderPlan(); renderTimeline(); renderWeekly(); renderWish(); renderOwed(); renderCatch();
+  renderAccounts(); renderCards(); renderLoans(); renderPlan(); renderTimeline(); renderWeekly(); renderWish(); renderOwed(); renderCatch(); renderBuys();
   const lc = $("#logCount"); if(lc) lc.textContent = S.log.length ? `${S.log.length} entries` : "nothing yet";
   $("#log").innerHTML = S.log.map(l=>`<div class="row"><div class="grow"><div class="name">${esc(l.t)}</div>
       <div class="sub">${new Date(l.when).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</div></div></div>`
@@ -271,6 +271,37 @@ function renderCards(){
   }).join("");
 }
 
+// ---------- purchases not on a card ----------
+function renderBuys(){
+  const box = $("#buys"); if(!box) return;
+  const list = [...S.buys].sort((a,b)=> a.date < b.date ? 1 : -1);   // newest first
+  if(!list.length){
+    box.innerHTML = `<div class="empty">Things you paid for in cash, by e-wallet or by transfer. Log one here and a debt can take its amount and split from it, the same way card purchases work.</div>`;
+    return;
+  }
+  const spent = r2(list.reduce((s,b)=>s + b.amount, 0));
+  const others = r2(list.reduce((s,b)=>s + othersShare(BUYS, b), 0));
+  const mine = r2(spent - others);
+  box.innerHTML = `<div class="cardmeta" style="border-bottom:1px solid var(--line-soft)">
+      <div class="splitline"><span><b>${money(mine)}</b> yours</span>
+        ${others>0?`<span class="ok">${money(others)} others&rsquo;</span>`:""}</div>
+      ${others>0 && spent>0 ? `<div class="splitbar">
+          <i class="mine" style="width:${(mine/spent*100).toFixed(1)}%"></i>
+          <i class="theirs" style="width:${(others/spent*100).toFixed(1)}%"></i></div>` : ""}
+      <div class="sub">${money(spent)} across ${plural(list.length,"purchase")}</div>
+    </div>`
+    + list.map(b=>{
+      const oth = othersShare(BUYS, b), names = whoShares(BUYS, b);
+      return `<div class="row">
+        <div class="grow"><div class="name">${esc(b.label)}</div>
+          <div class="sub">${niceY(b.date)}${b.via?` &middot; ${esc(b.via)}`:""}${oth>0
+            ? ` &middot; <span class="ok">${esc(names.join(", "))} owe${names.length>1?"":"s"} ${money(oth)}</span>` : ""}</div></div>
+        <div class="amt num">${money(b.amount)}</div>
+        <div class="rowacts"><button class="iconbtn" data-edit-buy="${b.id}" aria-label="Edit purchase">Edit</button></div>
+      </div>`;
+    }).join("");
+}
+
 const pctTxt = v => (v === null || v === undefined || !Number.isFinite(v)) ? "—"
   : `${Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)}%`;
 
@@ -283,8 +314,8 @@ function renderLoans(){
   const unknown = costs.filter(x => !x.c).length;
   const note = $("#loanNote");
   if(note) note.innerHTML = known.length
-    ? `<b class="${totalInterest>0?"warn":""}">${money(totalInterest)}</b> interest across ${plural(known.length,"loan")}${unknown?` &middot; ${unknown} without an amount received`:""}`
-    : unknown ? `Add what you received to see the interest` : "";
+    ? `<b class="${totalInterest>0?"warn":""}">${money(totalInterest)}</b> interest across ${plural(known.length,"loan")}${unknown?` &middot; ${unknown} without the amount borrowed`:""}`
+    : unknown ? `Add how much you borrowed to see the interest` : "";
 
   $("#loans").innerHTML = costs.map(({L, c})=>{
     const left = unpaid(L), next = left[0], env = envelopeFor(L.id);
@@ -293,7 +324,7 @@ function renderLoans(){
     const when = !next ? "cleared" : n<0 ? `${-n}d overdue` : n===0 ? "due today" : `in ${n}d`;
     const costLine = L.fromPerson ? `<span class="pill">personal</span> no interest`
       : c ? `${money(c.interest)} interest &middot; ${pctTxt(c.markup)} on top${c.apr!==null?` &middot; &asymp;${pctTxt(c.apr)} a year`:""}`
-      : `<span class="dim">add what you received to see the interest</span>`;
+      : `<button class="linkbtn" data-edit-loan="${L.id}">Add how much you borrowed to see the interest</button>`;
     // What you borrowed against what it costs, on one bar: the interest is the part of the
     // bar that was never money you got to use.
     const costBar = c && !L.fromPerson && c.total > 0 ? `<div class="inst" style="display:block">
@@ -543,12 +574,23 @@ function renderWeekly(){
 
 // ---------- owed to you ----------
 const person = id => S.people.find(p => p.id === id);
+// Non-card purchases stand in for a card here. The stand-in has no statements, so nothing
+// that treats card spending as a pass-through ever applies to them: you have already paid.
+const BUYS = {id:BUYS_ID, label:"Other purchases", purchases:[]};
 const purchaseOf = o => {
+  if(o.loanId === BUYS_ID){
+    const pu = S.buys.find(x => x.id === o.purchaseId);
+    return pu ? {L:BUYS, pu} : null;
+  }
   const L = loan(o.loanId);
   if(!L || !isCard(L)) return null;
   const pu = (L.purchases || []).find(x => x.id === o.purchaseId);
   return pu ? {L, pu} : null;
 };
+// The little tag saying where a debt's purchase was made.
+const linkTag = link => link.L.id === BUYS_ID
+  ? (link.pu.via ? `via ${esc(link.pu.via)}` : "paid directly")
+  : `on ${esc(link.L.label)}`;
 // A card-backed debt IS the purchase: its amount and what it was for come from there, so
 // editing the purchase moves the debt with it and neither can go stale.
 const SHARES = [
@@ -807,15 +849,16 @@ function renderOwed(){
           <div class="sub">${money(g.back)} of ${money(g.ever)} back &middot; ${plural(g.open.length,"debt")} open</div></div>
         <div class="amt num ok">${money(g.left)}</div>
         <div class="rowacts">
+          <button class="btn mini" data-share-owed="${g.who.id}" title="Make an image of what ${esc(g.who.name)} owes, with your QR">Send</button>
           <button class="iconbtn" data-edit-person="${g.who.id}" aria-label="Edit person">Edit</button>
         </div>
       </div>` + g.open.map(o=>{
         const link = purchaseOf(o);
         return `<div class="row kid">
           <div class="grow"><div class="name">${esc(owedLabel(o) || "No description")}</div>
-            ${link?`<div class="sub"><span class="pill due">on ${esc(link.L.label)}</span> ${
+            ${link?`<div class="sub"><span class="pill due">${linkTag(link)}</span> ${
                shareOf(o) > 0 && !near(shareOf(o),1) ? `${shareLabel(shareOf(o))}${money(link.pu.amount)} &middot; ` : ""}${nice(link.pu.date)}</div>`
-                  :`<div class="sub">not on a card</div>`}</div>
+                  :`<div class="sub">not linked to a purchase</div>`}</div>
           <div class="amt num">${money(owedAmount(o))}</div>
           <div class="rowacts">
             <button class="btn mini" data-owed-settle="${o.id}">Settled</button>
@@ -967,4 +1010,145 @@ function renderTimeline(){
       after ${monthName(months[months.length-1]+"-01")}, through ${niceY(beyond[beyond.length-1])}</span>
       <span class="num">${money(r2(beyond.reduce((s,d)=>s+totalOf(d),0)))}</span></div>`;
   $("#timeline").innerHTML = html;
+}
+
+// ---------- "what you owe me" image ----------
+// Loaded only when needed: the encoder when an image is made, the decoder when a QR is
+// uploaded — an ordinary page load never fetches either. Versions are pinned.
+const QR_ENCODER = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js";
+const QR_DECODER = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
+const loadScript = (() => {
+  const cache = {};
+  return src => cache[src] ||= new Promise((res, rej) => {
+    const el = document.createElement("script");
+    el.src = src; el.async = true; el.onload = res;
+    el.onerror = () => { delete cache[src]; el.remove();
+      rej(new Error("Could not load the QR tools. They need a connection the first time.")); };
+    document.head.appendChild(el);
+  });
+})();
+
+// QR Ph codes are EMV strings of tag-length-value fields; tag 59 is who the payment goes to.
+function qrPayee(text){
+  let i = 0;
+  while(i + 4 <= text.length){
+    const tag = text.slice(i, i+2), len = Number(text.slice(i+2, i+4));
+    if(!/^\d\d$/.test(tag) || !Number.isInteger(len)) return "";
+    if(tag === "59") return text.slice(i+4, i+4+len).trim();
+    i += 4 + len;
+  }
+  return "";
+}
+
+// Draws the QR as crisp square modules on a white tile. Dark on light, square and with a full
+// quiet zone: recolouring or rounding it would look closer to the theme, but a code that
+// someone's banking app refuses to read is worse than one that matches.
+async function qrMatrix(text){
+  await loadScript(QR_ENCODER);
+  const q = qrcode(0, "M"); q.addData(text); q.make();
+  const n = q.getModuleCount();
+  return {n, dark:(r,c) => q.isDark(r,c)};
+}
+function paintQr(g, m, x, y, size){
+  const quiet = 4, cell = Math.floor(size / (m.n + quiet*2)), real = cell * (m.n + quiet*2);
+  const ox = x + (size - real) / 2, oy = y + (size - real) / 2;
+  g.fillStyle = "#ffffff"; roundRect(g, x, y, size, size, size * .07); g.fill();
+  g.fillStyle = "#0b0d11";
+  for(let r = 0; r < m.n; r++) for(let c = 0; c < m.n; c++)
+    if(m.dark(r,c)) g.fillRect(ox + (c+quiet)*cell, oy + (r+quiet)*cell, cell, cell);
+}
+function roundRect(g, x, y, w, h, r){
+  g.beginPath();
+  if(g.roundRect) g.roundRect(x, y, w, h, r);
+  else { g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+}
+
+// One tall card in the app's dark palette: what is still open, the total, and your QR.
+async function drawOwedImage(personId){
+  const who = person(personId);
+  const open = S.owed.filter(o => o.personId === personId && !o.settled);
+  const total = r2(open.reduce((s,o)=>s + owedAmount(o), 0));
+  const qrText = S.me?.qr || "";
+  const m = qrText ? await qrMatrix(qrText) : null;
+  const payee = (S.me?.name || (qrText && qrPayee(qrText)) || "").trim();
+
+  const W = 1080, P = 80, F = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif';
+  const C = {bg:"#000000", card:"#1c1c1e", fg:"#f5f5f7", dim:"#98989d", line:"#38383a", accent:"#2997ff", good:"#30d158"};
+  const MAX = 9, shown = open.slice(0, MAX), rest = open.slice(MAX);
+  const ROW = 118, QR = 560;
+  const H = P + 250 + shown.length*ROW + (rest.length ? 80 : 0) + 200 + (m ? QR + 190 : 0) + 110;
+
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const g = cv.getContext("2d");
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  g.fillStyle = C.card; roundRect(g, 40, 40, W-80, H-80, 56); g.fill();
+  // the same soft accent light the app's hero card carries
+  const glow = g.createRadialGradient(140, 120, 0, 140, 120, 700);
+  glow.addColorStop(0, "rgba(41,151,255,.16)"); glow.addColorStop(1, "rgba(41,151,255,0)");
+  g.fillStyle = glow; roundRect(g, 40, 40, W-80, H-80, 56); g.fill();
+
+  const fit = (text, font, max) => {
+    g.font = font; if(g.measureText(text).width <= max) return text;
+    let t = text; while(t.length && g.measureText(t + "…").width > max) t = t.slice(0, -1);
+    return t + "…";
+  };
+  const left = P + 20, right = W - P - 20;
+  let y = P + 60;
+
+  g.textBaseline = "alphabetic";
+  g.fillStyle = C.dim; g.font = `600 30px ${F}`;
+  g.fillText(payee ? `From ${fit(payee, `600 30px ${F}`, right-left-90)}` : "Ledger", left, y);
+  y += 78;
+  g.fillStyle = C.fg; g.font = `700 64px ${F}`;
+  g.fillText(fit(`Hi ${who.name},`, `700 64px ${F}`, right-left), left, y);
+  y += 56;
+  g.fillStyle = C.dim; g.font = `400 34px ${F}`;
+  g.fillText(open.length ? "Here's what's still open between us." : "You're all squared up — thank you!", left, y);
+  y += 56;
+
+  const plainTag = link => link.L.id === BUYS_ID ? (link.pu.via ? `via ${link.pu.via}` : "paid directly") : `on ${link.L.label}`;
+  for(const o of shown){
+    g.strokeStyle = C.line; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(left, y); g.lineTo(right, y); g.stroke();
+    const amt = money(owedAmount(o));
+    g.font = `600 40px ${F}`; const aw = g.measureText(amt).width;
+    g.fillStyle = C.fg; g.textAlign = "right"; g.fillText(amt, right, y + 60); g.textAlign = "left";
+    g.fillText(fit(owedLabel(o) || "No description", `600 40px ${F}`, right-left-aw-40), left, y + 60);
+    const link = purchaseOf(o);
+    const sub = link
+      ? [shareOf(o) > 0 && !near(shareOf(o), 1) ? `${shareLabel(shareOf(o))}${money(link.pu.amount)}` : "",
+         nice(link.pu.date), plainTag(link)].filter(Boolean).join("  ·  ")
+      : "";
+    if(sub){ g.fillStyle = C.dim; g.font = `400 28px ${F}`; g.fillText(fit(sub, `400 28px ${F}`, right-left), left, y + 98); }
+    y += ROW;
+  }
+  if(rest.length){
+    g.fillStyle = C.dim; g.font = `400 30px ${F}`;
+    g.fillText(`+ ${plural(rest.length, "more")} · ${money(r2(rest.reduce((s,o)=>s+owedAmount(o),0)))}`, left, y + 50);
+    y += 80;
+  }
+
+  g.strokeStyle = C.line; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(left, y); g.lineTo(right, y); g.stroke();
+  y += 70;
+  g.fillStyle = C.dim; g.font = `600 32px ${F}`; g.fillText("Total", left, y + 44);   // sits on the number's baseline
+  g.fillStyle = C.good; g.font = `700 84px ${F}`; g.textAlign = "right";
+  g.fillText(money(total), right, y + 44); g.textAlign = "left";
+  y += 130;
+
+  if(m){
+    paintQr(g, m, (W - QR) / 2, y, QR);
+    y += QR + 70;
+    g.textAlign = "center";
+    g.fillStyle = C.fg; g.font = `600 36px ${F}`;
+    g.fillText(payee ? `Scan to pay ${fit(payee, `600 36px ${F}`, W-2*P-220)}` : "Scan to pay", W/2, y);
+    g.fillStyle = C.dim; g.font = `400 28px ${F}`;
+    g.fillText("Works with any bank or e-wallet app that scans QR Ph", W/2, y + 48);
+    g.textAlign = "left";
+    y += 110;
+  }
+  g.fillStyle = C.dim; g.font = `400 26px ${F}`; g.textAlign = "center";
+  g.fillText(`As of ${niceY(today())}`, W/2, H - 90);
+  g.textAlign = "left";
+  return cv;
 }

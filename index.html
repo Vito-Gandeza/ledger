@@ -85,10 +85,9 @@ body[data-state="empty"] .topbar{display:none}
 .dash > *, .col > *{min-width:0}
 .col{display:contents}
 @media (max-width:1079px){
-  .a-hero{order:0} .a-plan{order:1} .a-weekly{order:2} .a-wallets{order:3}
-  .a-catch{order:1} .a-plan{order:2} .a-weekly{order:3} .a-wallets{order:4}
-  .a-owed{order:5} .a-wish{order:6} .a-cards{order:7} .a-timeline{order:8}
-  .a-loans{order:9} .a-log{order:10} .a-foot{order:11}
+  .a-hero{order:0} .a-catch{order:1} .a-plan{order:2} .a-weekly{order:3} .a-wallets{order:4}
+  .a-owed{order:5} .a-wish{order:6} .a-cards{order:7} .a-buys{order:8} .a-timeline{order:9}
+  .a-loans{order:10} .a-log{order:11} .a-foot{order:12}
 }
 @media (min-width:1080px){
   :root{--maxw:1200px}
@@ -185,6 +184,7 @@ button{background:none; border:0; cursor:pointer}
   padding:8px 16px; font-size:15px; font-weight:400; min-height:36px; white-space:nowrap;
   display:inline-flex; align-items:center; justify-content:center; gap:6px;
   transition:transform .16s var(--ease), background .16s, border-color .16s, opacity .16s}
+a.btn{text-decoration:none}   /* "Save image" is a download link styled as a button */
 .btn:active{transform:scale(.95)}
 .btn:focus-visible{outline:2px solid var(--accent-hi); outline-offset:2px}
 .btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent);
@@ -229,6 +229,17 @@ input.locked, select.locked{opacity:.62; cursor:not-allowed}
 input:focus,select:focus{outline:0; border-color:var(--accent-hi);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
 label{display:block; margin-bottom:16px}
+/* Author display rules beat the hidden attribute, so without this a hidden label or switch
+   still shows. One rule here instead of a fix per component. */
+[hidden]{display:none !important}
+/* Inline text-style action inside a line of copy. */
+.linkbtn{color:var(--accent); font:inherit; padding:0; text-align:left; cursor:pointer}
+/* Your QR, and the preview of the image you are about to send. */
+.qrbox{display:grid; place-items:center; min-height:120px; margin:4px 0 16px;
+  border-radius:var(--r-md); background:var(--sunk); padding:14px}
+.qrbox canvas{width:min(220px,60vw); height:auto; border-radius:14px}
+.sharepreview{display:block; width:100%; max-height:58vh; object-fit:contain;
+  border-radius:var(--r-md); background:#000; margin:4px 0 14px}
 label .eyebrow{display:block; margin-bottom:6px}
 select.inline{width:auto; padding:7px 12px; font-size:13.5px; border-radius:var(--pill);
   min-height:34px; background:var(--sunk); border-color:var(--line-soft)}
@@ -478,6 +489,7 @@ body.boot .a-plan{animation-delay:.09s}
 body.boot .a-weekly{animation-delay:.16s}
 body.boot .a-wallets{animation-delay:.22s}
 body.boot .a-owed, body.boot .a-wish{animation-delay:.26s}
+body.boot .a-buys{animation-delay:.32s}
 body.boot .a-cards, body.boot .a-timeline{animation-delay:.30s}
 body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
 #welcome{animation:rise .7s var(--ease) backwards .1s}
@@ -570,6 +582,13 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
       <div id="cards"></div>
     </section>
 
+    <section class="a-buys">
+      <div class="shead"><h2>Other purchases</h2>
+        <div class="acts"><span class="sub">Not on a card</span><button class="btn" id="addBuy">+ Purchase</button></div>
+      </div>
+      <div class="card" id="buys"></div>
+    </section>
+
     <section class="a-loans">
       <div class="shead"><h2>Instalment loans</h2>
         <div class="acts"><span class="sub" id="loanNote"></span><button class="btn" id="addLoan">+ Loan</button></div></div>
@@ -590,7 +609,7 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
 
     <section class="a-owed">
       <div class="shead"><h2>Owed to you</h2>
-        <div class="acts"><span class="sub" id="owedNote"></span><button class="btn" id="addOwed">+ Debt</button></div>
+        <div class="acts"><span class="sub" id="owedNote"></span><button class="btn ghost" id="myQrBtn">Your QR</button><button class="btn" id="addOwed">+ Debt</button></div>
       </div>
       <div class="card" id="owedList"></div>
     </section>

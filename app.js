@@ -9,7 +9,7 @@ function info(title, html){
   const f = $("#dlgForm");
   f.onsubmit = null;
   f.innerHTML = `<h3>${esc(title)}</h3>${html}
-    <div class="dact"><button value="cancel" class="btn primary">Done</button></div>`;
+    <div class="dact"><button value="cancel" class="btn">Done</button></div>`;
   $("#dlg").showModal();
 }
 
@@ -29,7 +29,7 @@ function ask(title, fields, onOk){
         <button type="button" class="btn mini ghost" data-logo-clear="${x.name}">Clear</button>
       </span></label>`;
     return `<label><span class="eyebrow">${x.label}</span><input name="${x.name}" type="${x.type||"text"}"
-      ${x.type==="number"?'step="0.01" inputmode="decimal"':""} value="${esc(x.value??"")}" ${x.required?"required":""}></label>`;
+      ${x.type==="number"?'step="0.01" inputmode="decimal"':""} value="${esc(x.value??"")}" ${x.placeholder?`placeholder="${esc(x.placeholder)}"`:""} ${x.required?"required":""}></label>`;
   }).join("") + `<div class="dact">
       ${fields.del?`<button type="button" id="dlgDel" class="btn ghost bad" style="margin-right:auto">Delete</button>`:""}
       <button type="button" id="dlgCancel" class="btn">Cancel</button><button value="ok" class="btn primary">Save</button></div>`;
@@ -98,6 +98,111 @@ function editBalance(btn){
   inp.onblur = () => finish(true);
 }
 
+// ---------- your QR, and the image that carries it ----------
+// Reads a QR out of a screenshot. Screenshots are tried small first, which is fast and finds a
+// large code easily, then full size for a code that is small in the frame; both polarities,
+// since a dark-mode wallet app draws it light-on-dark.
+async function decodeQrImage(file){
+  await loadScript(QR_DECODER);
+  const url = URL.createObjectURL(file);
+  try{
+    const img = await new Promise((res, rej) => { const i = new Image();
+      i.onload = () => res(i); i.onerror = () => rej(new Error("Could not read that image.")); i.src = url; });
+    for(const max of [900, 1800, Infinity]){
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width*k)); c.height = Math.max(1, Math.round(img.height*k));
+      const g = c.getContext("2d", {willReadFrequently:true});
+      g.drawImage(img, 0, 0, c.width, c.height);
+      const hit = jsQR(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height, {inversionAttempts:"attemptBoth"});
+      if(hit?.data) return hit.data;
+      if(k === 1) break;
+    }
+  } finally { URL.revokeObjectURL(url); }
+  throw new Error("Couldn't find a QR code in that image. Try a screenshot where the code is fully visible.");
+}
+
+function openMyQr(){
+  const has = !!S.me?.qr;
+  info("Your payment QR", `
+    <p class="hint">Upload a screenshot of your receive-money QR from GCash, Maya or your bank. Only the code itself is kept: it is read out of the image, stored as a short piece of text in your own data, and redrawn to match the app on every image you send.</p>
+    <div class="qrbox" id="qrBox">${has ? "" : `<span class="sub">No QR yet</span>`}</div>
+    ${has ? `<label><span class="eyebrow">Name shown on the image</span>
+      <input id="qrName" value="${esc(S.me.name || "")}" placeholder="${esc(qrPayee(S.me.qr) || "Your name")}"></label>` : ""}
+    <div class="dact" style="justify-content:flex-start;margin-bottom:10px">
+      <label class="btn${has?"":" primary"}" style="margin:0">${has ? "Replace" : "Upload screenshot"}<input type="file" accept="image/*" id="qrFile" hidden></label>
+      ${has ? `<button type="button" class="btn ghost bad" id="qrRemove">Remove</button>` : ""}
+    </div>`);
+  if(has) qrMatrix(S.me.qr).then(m => {
+    const c = document.createElement("canvas"); c.width = c.height = 440;
+    paintQr(c.getContext("2d"), m, 0, 0, 440);
+    const box = $("#qrBox"); if(box) box.replaceChildren(c);
+  }).catch(err => { const box = $("#qrBox"); if(box) box.textContent = err.message; });
+  $("#qrFile").onchange = async e => {
+    const file = e.target.files[0]; if(!file) return;
+    const box = $("#qrBox"); if(box) box.innerHTML = `<span class="sub">Reading…</span>`;
+    try{
+      const text = await decodeQrImage(file);
+      S.me = {qr:text, name:S.me?.name || ""};
+      logIt("Payment QR updated"); render(); openMyQr();
+    } catch(err){ if(box) box.innerHTML = `<span class="sub bad">${esc(err.message)}</span>`; }
+  };
+  const nameIn = $("#qrName");
+  if(nameIn) nameIn.onchange = () => { S.me.name = nameIn.value.trim(); render(); };
+  const rm = $("#qrRemove");
+  if(rm) rm.onclick = () => { if(!confirm("Remove your payment QR from the app?")) return;
+    S.me = null; logIt("Payment QR removed"); render(); openMyQr(); };
+}
+
+// Makes the image, previews it, and hands it to the phone's share sheet (Messenger, Viber,
+// Photos …). Where sharing files is not supported it falls back to saving the image.
+async function shareOwed(personId){
+  const who = person(personId); if(!who) return;
+  let cv;
+  try{ cv = await drawOwedImage(personId); } catch(err){ return alert(err.message); }
+  const blob = await new Promise(res => cv.toBlob(res, "image/png"));
+  const name = `${who.name.replace(/[^\w-]+/g, "-")}-owes.png`;
+  const file = new File([blob], name, {type:"image/png"});
+  const url = URL.createObjectURL(blob);
+  const canShare = !!navigator.canShare?.({files:[file]});
+  info(`What ${who.name} owes`, `
+    ${S.me?.qr ? "" : `<p class="hint">Add your payment QR and it goes on the image too.</p>`}
+    <img class="sharepreview" src="${url}" alt="Summary of what ${esc(who.name)} owes">
+    <div class="dact" style="justify-content:flex-start;margin-bottom:10px">
+      ${canShare ? `<button type="button" class="btn primary" id="shareGo">Share</button>` : ""}
+      <a class="btn${canShare ? "" : " primary"}" href="${url}" download="${esc(name)}">Save image</a>
+      <button type="button" class="btn ghost" id="shareQr">${S.me?.qr ? "Change QR" : "Add your QR"}</button>
+    </div>`);
+  $("#dlg").addEventListener("close", () => URL.revokeObjectURL(url), {once:true});
+  const go = $("#shareGo");
+  if(go) go.onclick = () => navigator.share({files:[file], title:`What ${who.name} owes`}).catch(()=>{});
+  $("#shareQr").onclick = openMyQr;
+}
+
+// When the purchase a debt points at is deleted, the debt keeps what it was worth and what it
+// was for — otherwise a derived debt would fall back to its stored amount, often zero.
+function keepAmountAndUnlink(o){
+  o.amount = owedAmount(o); o.note = owedLabel(o) || o.note;
+  o.loanId = ""; o.purchaseId = ""; o.share = 1;
+}
+
+// ---------- purchases not on a card ----------
+const buyFields = b => [
+  {name:"label",label:"What was it",value:b?.label ?? "",required:1},
+  {name:"amount",label:"How much",type:"number",value:b?.amount ?? "",required:1},
+  {name:"date",label:"Date",type:"date",value:b?.date ?? today(),required:1},
+  {name:"via",label:"Paid with",value:b?.via ?? "",placeholder:"Cash, GCash, bank transfer…"},
+];
+$("#addBuy").onclick = ()=>{
+  const f = buyFields(null);
+  f.hint = "A record only — it does not change any wallet. Link a debt to it and the amount and split come from here.";
+  ask("New purchase", f, (v,d)=>{ if(v!=="ok") return;
+    const amt = r2(d.amount); if(!(amt > 0)) return;
+    S.buys.push({id:uid(), label:d.label, amount:amt, date:d.date||today(), via:(d.via||"").trim()});
+    logIt(`Logged ${d.label} ${money(amt)}`); render(); });
+};
+$("#myQrBtn").onclick = openMyQr;
+
 // ---------- welcome ----------
 $("#wStart").onclick = ()=>{ S = starter(); logIt("Started a new ledger"); render(); };
 $("#wDemo").onclick  = ()=>{ S = demoData(); render(); };
@@ -121,17 +226,28 @@ function addSection(parentId){
     logIt(`Added section ${d.name}`); render(); });
 }
 
-// Every card purchase, as "cardId:purchaseId" so one select carries both halves of the link.
-const purchaseOptions = () => [{v:"",t:"— not on a card —"},
-  ...S.loans.filter(isCard).flatMap(L => (L.purchases||[])
+// Every purchase you could have fronted, as "sourceId:purchaseId" so one select carries both
+// halves of the link — card purchases first, then the ones made outside a card.
+const purchaseOptions = () => [{v:"",t:"— not linked to a purchase —"},
+  ...S.loans.filter(isCard).flatMap(L => (L.purchases||[]).filter(pu => !pu.carry)
     .slice().sort((a,b)=> a.date<b.date?1:-1)
-    .map(pu => ({v:`${L.id}:${pu.id}`, t:`${L.label} · ${pu.label} · ${money(pu.amount)} · ${nice(pu.date)}`})))];
+    .map(pu => ({v:`${L.id}:${pu.id}`, t:`${L.label} · ${pu.label} · ${money(pu.amount)} · ${nice(pu.date)}`}))),
+  ...[...S.buys].sort((a,b)=> a.date<b.date?1:-1)
+    .map(b => ({v:`${BUYS_ID}:${b.id}`, t:`${b.via || "Paid directly"} · ${b.label} · ${money(b.amount)} · ${nice(b.date)}`}))];
+// The purchase a "sourceId:purchaseId" value points at, from either kind of source.
+const purchaseFromValue = v => {
+  const {loanId, purchaseId} = splitPur(v);
+  if(!purchaseId) return null;
+  if(loanId === BUYS_ID) return S.buys.find(b => b.id === purchaseId) || null;
+  const L = loan(loanId);
+  return L && isCard(L) ? (L.purchases||[]).find(x => x.id === purchaseId) || null : null;
+};
 
 const owedFields = o => [
   {name:"personId",label:"Who owes you",type:"select",value:o?.personId ?? "",
    options:[{v:"",t:"— someone new —"}, ...S.people.map(x=>({v:x.id,t:x.name}))]},
-  {name:"newName",label:"Their name (only for someone new)",value:""},
-  {name:"pur",label:"Paid with a card purchase",type:"select",options:purchaseOptions(),
+  {name:"newName",label:"Their name",value:""},
+  {name:"pur",label:"Linked to one of your purchases",type:"select",options:purchaseOptions(),
    value: o?.purchaseId ? `${o.loanId}:${o.purchaseId}` : ""},
   {name:"share",label:"How much of it is theirs",type:"select",
    options:SHARES.map(x=>({v:x.v,t:x.t})), value: o ? shareOf(o) : 1},
@@ -140,9 +256,10 @@ const owedFields = o => [
 ];
 const splitPur = v => { const [loanId, purchaseId] = String(v||"").split(":"); return {loanId:loanId||"", purchaseId:purchaseId||""}; };
 
-// Picking a purchase fills the amount and description from it and locks both — a
-// card-backed debt IS the purchase, so letting the two be edited apart invites drift.
-// Same idea for the name box, which only means anything when adding someone new.
+// Picking a purchase fills the amount and description from it and locks both — a linked
+// debt IS the purchase, so letting the two be edited apart invites drift. Fields that do not
+// apply are hidden rather than greyed out: the name box only matters for someone new, and
+// a share only means anything against a purchase.
 function wireOwedDialog(){
   const f = $("#dlgForm");
   const pur = f.querySelector('select[name="pur"]');
@@ -152,14 +269,9 @@ function wireOwedDialog(){
   const who = f.querySelector('select[name="personId"]');
   const nm  = f.querySelector('input[name="newName"]');
   const sync = ()=>{
-    const {loanId, purchaseId} = splitPur(pur.value);
-    const L = loan(loanId);
-    const bought = L && isCard(L) ? (L.purchases||[]).find(x=>x.id===purchaseId) : null;
+    const bought = purchaseFromValue(pur.value);
     const sh = Number(share.value);
-    // Splitting only means anything against a purchase, and the amount is only typed in
-    // when it is not being worked out from one.
-    share.disabled = !bought;
-    share.classList.toggle("locked", !bought);
+    share.closest("label").hidden = !bought;
     const derived = !!bought && sh > 0;
     amt.readOnly = derived;
     amt.classList.toggle("locked", derived);
@@ -169,8 +281,7 @@ function wireOwedDialog(){
       note.value = bought.label;
       if(derived) amt.value = r2(bought.amount * sh);
     }
-    nm.disabled = !!who.value;
-    nm.classList.toggle("locked", !!who.value);
+    nm.closest("label").hidden = !!who.value;
   };
   pur.onchange = sync; share.onchange = sync; who.onchange = sync; sync();
 }
@@ -188,11 +299,11 @@ function resolvePerson(d){
 
 $("#addOwed").onclick = ()=>{
   const f = owedFields(null);
-  f.hint = "Pick the card purchase if you fronted the money — the amount and what it was for then come straight from it. If you only covered part of a shared bill, set their share.";
+  f.hint = "Link the purchase if you paid for it — the amount and what it was for then come straight from it. If you only covered part of a shared bill, set their share.";
   ask("Someone owes you", f, (v,d)=>{ if(v!=="ok") return;
     const link = splitPur(d.pur), amt = r2(d.amount);
     if(!link.purchaseId && !(amt > 0))
-      return alert("Enter an amount, or pick the card purchase it was paid with.");
+      return alert("Enter an amount, or link the purchase it was for.");
     const personId = resolvePerson(d);
     const row = {id:uid(), personId, amount:amt, note:d.note||"",
                  share: link.purchaseId ? Number(d.share) : 1, ...link, settled:false};
@@ -218,14 +329,16 @@ $("#addWish").onclick = ()=>{
 
 const lenderField = L => ({name:"lender",label:"Who lent it",type:"select",value:L?.fromPerson?"person":"app",
   options:[{v:"app",t:"A lending app or bank"},{v:"person",t:"A person (no interest)"}]});
-const principalField = L => ({name:"principal",label:"Amount you actually received",type:"number",
+// The one figure the interest is worked out from — a schedule alone cannot say how much of it
+// is interest. Asked for only when editing, so adding a loan stays short.
+const principalField = L => ({name:"principal",label:"How much you borrowed (to show the interest)",type:"number",
   value: L?.principal || ""});
-// A loan from a person carries no interest, so the amount received means nothing there.
+// A loan from a person carries no interest, so the amount borrowed means nothing there.
 function wireLoanDialog(){
   const f = $("#dlgForm"), lender = f.querySelector('select[name="lender"]');
   const pr = f.querySelector('input[name="principal"]');
-  const sync = ()=>{ const byPerson = lender.value === "person";
-    pr.disabled = byPerson; pr.classList.toggle("locked", byPerson); };
+  if(!pr) return;
+  const sync = ()=>{ pr.closest("label").hidden = lender.value === "person"; };
   lender.onchange = sync; sync();
 }
 
@@ -237,16 +350,12 @@ $("#addLoan").onclick = ()=>{
     {name:"freq",label:"Schedule",type:"select",options:[{v:"week",t:"Every week"},{v:"2weeks",t:"Every 2 weeks"},{v:"month",t:"Every month"}],value:"week"},
     {name:"amount",label:"Amount per instalment",type:"number",required:1},
     {name:"count",label:"How many instalments",type:"number",value:"4",required:1},
-    {name:"start",label:"First due date",type:"date",value:today(),required:1},
-    principalField(null)];
-  f.hint = "Give the amount you actually received and the interest you are paying is worked out from the schedule.";
+    {name:"start",label:"First due date",type:"date",value:today(),required:1}];
   ask("New loan", f, (v,d)=>{ if(v!=="ok") return;
     const fromPerson = d.lender === "person";
     S.loans.push({id:uid(), provider:d.provider||(fromPerson?"A friend":"Loan"), label:d.label, ref:d.ref, freq:d.freq,
-                  fromPerson, principal: fromPerson ? 0 : (r2(d.principal)||0),
-                  items:gen(d.start, +d.count, d.freq, +d.amount)});
+                  fromPerson, principal:0, items:gen(d.start, +d.count, d.freq, +d.amount)});
     logIt(`Added loan ${d.label}${fromPerson?` from ${d.provider}`:""}`); render(); });
-  wireLoanDialog();
 };
 
 $("#addCard").onclick = ()=> ask("New credit card",[
@@ -299,13 +408,32 @@ function reorder(id, dir){
 }
 
 document.body.addEventListener("click", e=>{
-  const t = e.target.closest("[data-bal],[data-edit-acc],[data-add-kid],[data-mv],[data-unpay],[data-edit-inst],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-allowance-claimed],[data-day],[data-edit-wish],[data-edit-owed],[data-owed-settle],[data-edit-person],[data-mark-paid],[data-mark-card],[data-edit-loan],[data-owed-unsettle]");
+  const t = e.target.closest("[data-bal],[data-edit-acc],[data-add-kid],[data-mv],[data-unpay],[data-edit-inst],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-allowance-claimed],[data-day],[data-edit-wish],[data-edit-owed],[data-owed-settle],[data-edit-person],[data-mark-paid],[data-mark-card],[data-edit-loan],[data-owed-unsettle],[data-share-owed],[data-edit-buy]");
   if(!t) return;
   const pick = k => { const [id,i] = (t.dataset[k]||"").split(":"); return [loan(id), +i]; };
   const pickCard = k => { const [id,key] = (t.dataset[k]||"").split(":"); return [loan(id), key]; };
   e.preventDefault();
 
   if(t.dataset.bal) return editBalance(t);
+  if(t.dataset.shareOwed) return shareOwed(t.dataset.shareOwed);
+  if(t.dataset.editBuy){
+    const b = S.buys.find(x => x.id === t.dataset.editBuy); if(!b) return;
+    const linked = S.owed.filter(o => o.loanId === BUYS_ID && o.purchaseId === b.id);
+    const f = buyFields(b);
+    f.del = linked.length
+      ? `Delete ${b.label}? ${plural(linked.length, "debt")} linked to it will keep their amount but lose the link.`
+      : `Delete ${b.label}?`;
+    return ask("Edit purchase", f, (v,d)=>{
+      if(v==="del"){
+        // Keep what they owe: the amount is copied onto the debt before the link goes.
+        for(const o of linked) keepAmountAndUnlink(o);
+        S.buys = S.buys.filter(x => x.id !== b.id);
+        logIt(`Removed ${b.label}`); return render();
+      }
+      if(v!=="ok") return;
+      b.label = d.label; b.amount = r2(d.amount); b.date = d.date || b.date; b.via = (d.via||"").trim();
+      render(); });
+  }
 
   // Pick the funding wallet from the loan's own side. One wallet per loan, so linking moves it.
   if(t.dataset.link){
@@ -340,7 +468,7 @@ document.body.addEventListener("click", e=>{
       if(v!=="ok") return;
       const link = splitPur(d.pur), amt = r2(d.amount);
       if(!link.purchaseId && !(amt > 0))
-        return alert("Enter an amount, or pick the card purchase it was paid with.");
+        return alert("Enter an amount, or link the purchase it was for.");
       o.personId = resolvePerson(d); o.amount = amt; o.note = d.note||"";
       o.share = link.purchaseId ? Number(d.share) : 1;
       Object.assign(o, link);
@@ -401,9 +529,9 @@ document.body.addEventListener("click", e=>{
     f.del = `Delete ${L.label} and every purchase on it?`;
     ask("Edit "+L.label, f, (v,d)=>{
       if(v==="del"){
+        for(const o of S.owed) if(o.loanId===L.id) keepAmountAndUnlink(o);   // before the card goes
         S.loans = S.loans.filter(x=>x.id!==L.id);
         S.accounts.forEach(a=>{ if(a.loanId===L.id) a.loanId=""; });
-        for(const o of S.owed) if(o.loanId===L.id){ o.loanId=""; o.purchaseId=""; }
         return render(); }
       if(v!=="ok") return;
       L.label=d.label; L.limit=r2(d.limit); L.sDay=+d.sDay; L.dDay=+d.dDay;
@@ -418,8 +546,8 @@ document.body.addEventListener("click", e=>{
     f.del = `Delete the purchase "${p.label}" for ${money(p.amount)}?`;
     ask("Edit purchase", f, (v,d)=>{
       if(v==="del"){
+        for(const o of S.owed) if(o.loanId===L.id && o.purchaseId===pid) keepAmountAndUnlink(o);   // before it goes
         L.purchases = L.purchases.filter(x=>x.id!==pid);
-        for(const o of S.owed) if(o.loanId===L.id && o.purchaseId===pid){ o.loanId=""; o.purchaseId=""; }
         rebuildCard(L); return render();
       }
       if(v!=="ok") return;
@@ -474,7 +602,7 @@ document.body.addEventListener("click", e=>{
       {name:"label",label:"What for",value:L.label,required:1},
       {name:"ref",label:"Reference #",value:L.ref||""},
       principalField(L)];
-    f.hint = `The schedule adds up to ${money(loanScheduled(L))}. Give what you actually received and the difference is the interest.`;
+    f.hint = `The schedule adds up to ${money(loanScheduled(L))}. Say how much you borrowed and the difference is the interest.`;
     f.del = `Delete ${L.provider} · ${L.label} and its whole schedule?`;
     ask("Edit "+L.label, f, (v,d)=>{
       if(v==="del"){
@@ -1070,6 +1198,35 @@ function demo(){
   ok(samL.ever===500 && samL.back===0 && samL.left===500, "an open debt is all still to come back", samL);
   ok(alexL.ever===250 && alexL.back===250 && alexL.left===0, "a settled one fills the bar", alexL);
   ok(owedToMe()===500, "only open debts count as still owed");
+
+  // --- purchases outside a card ---
+  S = {v:DATA_V, log:[], wish:[], allowance:null, assumePaid:true, me:null,
+       accounts:[{id:"m",parent:null,name:"Main",kind:"gotyme",bal:1000,loanId:""}], loans:[],
+       people:[{id:"g",name:"Giorgia",brand:""}],
+       buys:[{id:"B",date:today(),label:"Banh mi",amount:398,via:"GCash"}],
+       owed:[{id:"o",personId:"g",amount:0,share:0.5,note:"",loanId:BUYS_ID,purchaseId:"B",settled:false}]};
+  ok(purchaseOf(S.owed[0]).pu.label==="Banh mi", "a debt can point at a purchase made outside any card");
+  ok(owedAmount(S.owed[0])===199 && owedLabel(S.owed[0])==="Banh mi", "and takes its amount, split and description from it");
+  ok(othersShare(BUYS, S.buys[0])===199, "their share of it is counted against the purchase");
+  ok(isPassThrough(S.owed[0])===false && cashOwed()===199, "you already paid it, so it is spendable cash when they pay you back");
+  ok(linkTag(purchaseOf(S.owed[0]))==="via GCash", "it says how you paid");
+  keepAmountAndUnlink(S.owed[0]);
+  ok(S.owed[0].amount===199 && S.owed[0].note==="Banh mi" && !S.owed[0].purchaseId,
+     "deleting the purchase leaves the debt worth what it was, not zero");
+  const mb = migrate({accounts:[],loans:[],log:[],wish:[],people:[],
+    buys:[null,{id:"b",label:"x",amount:"12.5"}],
+    owed:[{id:"o",personId:"p",amount:5,loanId:BUYS_ID,purchaseId:"GONE"}], me:{qr:"",name:"x"}});
+  ok(mb.buys.length===1 && mb.buys[0].amount===12.5 && mb.buys[0].date, "purchases are coerced and dated");
+  ok(mb.owed[0].loanId==="" && mb.owed[0].purchaseId==="", "a link to a deleted purchase is dropped");
+  ok(mb.me===null, "an empty QR is no QR");
+  ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:[],people:[],me:{qr:"000201",name:"V"}}).me.qr==="000201",
+     "your QR text survives a reload");
+
+  // --- reading who a QR Ph code pays ---
+  const emv = "000201010211" + "5912VITO GANDEZA" + "6006MANILA" + "6304ABCD";
+  ok(qrPayee(emv)==="VITO GANDEZA", "the payee name is read from tag 59");
+  ok(qrPayee("https://example.com/pay")==="", "anything that is not an EMV code has no payee");
+  ok(qrPayee("")==="", "an empty code has no payee");
 
   ok(r2(0.1+0.2)===0.3, "rounding");
   S = save0; undoStack = []; suppressHistory = false;

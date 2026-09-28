@@ -35,13 +35,25 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
   purchases. Carried-forward remainders are left out of the all-time figure, since they are a
   balance moved between statements rather than new spending.
 - **Owed to you.** Debts other people owe you, grouped under a profile per person so several
-  debts from the same person stay together. A debt can be linked to the card purchase you
-  fronted it on, in which case its amount and description come from that purchase and follow
+  debts from the same person stay together. A debt can be linked to the purchase you paid for,
+  on a card or not, in which case its amount and description come from that purchase and follow
   any edit to it. If you only covered part of a shared bill, set their share — half, a third,
   a quarter, or an amount you type — and the share follows the purchase too. Because a card-backed debt is already counted as a liability, the section
   never moves the headline number until the money is actually in a wallet. Each person has a
   bar filling toward everything they have owed you, and debts that have been paid back fold
   away into a history — with who paid what back — rather than disappearing.
+- **Other purchases.** Things you paid for outside a card — cash, e-wallet, a transfer. A record
+  only, it never changes a wallet; it exists so a debt can link to it and take its amount,
+  description and split from it, exactly as card purchases work. It shows how much of what you
+  spent was yours and how much was others'.
+- **Send someone what they owe.** "Send" on a person makes an image of their open debts — each
+  with its split and where it was paid — the total, and your payment QR, then hands it to your
+  phone's share sheet. Upload a screenshot of your receive-money QR once under "Your QR": the
+  code is read out of the image and kept as a few hundred bytes of text in your own synced
+  data, never in this repository, and redrawn cleanly on every image. It is drawn dark on a
+  white tile with a full quiet zone, because a code a banking app cannot read is worse than
+  one that does not match the theme. The QR reader and writer are loaded from jsDelivr (pinned
+  versions) only when you use this, so an ordinary page load never fetches them.
 - **Assume settled.** A switch in the header recomputes every stock of money in the app as if
   the debts owed to you had been paid. Cash someone owes you becomes spendable; something you
   fronted on a card does not, because that repayment goes straight back out to the card — it

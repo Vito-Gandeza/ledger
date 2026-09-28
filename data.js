@@ -147,8 +147,10 @@ const brandMark = (x, fallback) => x?.logo
 const colorOf = L => COLORS[Math.max(0,S.loans.findIndex(x=>x.id===L.id)) % COLORS.length];
 
 // ---------- data ----------
-const DATA_V = 6;
-const blank = () => ({v:DATA_V, accounts:[], loans:[], log:[], wish:[], owed:[], people:[]});
+const DATA_V = 7;
+// A debt linked to a non-card purchase stores this in place of a card id.
+const BUYS_ID = "buys";
+const blank = () => ({v:DATA_V, accounts:[], loans:[], log:[], wish:[], owed:[], people:[], buys:[], me:null});
 
 function starter(){
   const main = uid();
@@ -157,12 +159,12 @@ function starter(){
     {id:uid(), parent:main, name:"Myself",       kind:"gotyme", bal:0, loanId:"income"},
     {id:uid(), parent:null, name:"GCash",        kind:"gcash",  bal:0, loanId:""},
     {id:uid(), parent:null, name:"Cash on hand", kind:"cash",   bal:0, loanId:""},
-  ], loans:[], log:[], wish:[], owed:[], people:[]};
+  ], loans:[], log:[], wish:[], owed:[], people:[], buys:[], me:null};
 }
 
 // Fictional numbers, purely so a first-time visitor can see how the pieces fit.
 function demoData(){
-  const main=uid(), a=uid(), b=uid(), card=uid(), pur=uid(), sam=uid(), alex=uid();
+  const main=uid(), a=uid(), b=uid(), card=uid(), pur=uid(), sam=uid(), alex=uid(), bm=uid();
   return {v:DATA_V, accounts:[
     {id:main,  parent:null, name:"Main bank",    kind:"gotyme", bal:250,  loanId:""},
     {id:uid(), parent:main, name:"Myself",       kind:"gotyme", bal:2000, loanId:"income"},
@@ -183,7 +185,10 @@ function demoData(){
   people:[{id:sam, name:"Sam", brand:"#b38cff"}, {id:alex, name:"Alex", brand:"#4fd1e0"}],
   owed:[{id:uid(), personId:sam, amount:0, share:0.5, note:"", loanId:card, purchaseId:pur, settled:false},
         {id:uid(), personId:alex, amount:400, note:"Lunch", loanId:"", purchaseId:"", settled:false},
-        {id:uid(), personId:alex, amount:250, note:"Concert ticket", loanId:"", purchaseId:"", settled:false}],
+        {id:uid(), personId:alex, amount:250, note:"Concert ticket", loanId:"", purchaseId:"", settled:false},
+        {id:uid(), personId:alex, amount:0, share:0.5, note:"", loanId:BUYS_ID, purchaseId:bm, settled:false}],
+  buys:[{id:bm, date:addDays(today(),-1), label:"Banh mi", amount:398, via:"GCash"},
+        {id:uid(), date:addDays(today(),-4), label:"Groceries", amount:1250, via:"Cash"}],
   wish:[
     {id:uid(), name:"Mechanical keyboard", cost:4800, brand:"#2997ff", logo:""},
     {id:uid(), name:"Weekend trip", cost:12000, brand:"#3ecf9a", logo:""},
@@ -249,13 +254,25 @@ function migrate(s){
   const ids = new Set(s.accounts.map(a=>a.id));
   for(const a of s.accounts) if(a.parent && !ids.has(a.parent)) a.parent = null;
   for(const w of s.wish) if(w.accId && !ids.has(w.accId)) w.accId = "";
+  // Things you paid for outside any card — cash, e-wallet, a transfer. A record only: wallet
+  // balances are kept by hand, so these never move money. They exist so a debt can point at
+  // a real purchase and take its amount, description and split from it, as card ones do.
+  s.buys = Array.isArray(s.buys) ? s.buys.filter(b => b && typeof b === "object" && b.id).map(b => ({
+    ...b, label:String(b.label ?? "Purchase"), amount:r2(b.amount),
+    date: typeof b.date === "string" && b.date ? b.date : iso(new Date()),
+    via:  typeof b.via  === "string" ? b.via : "",
+  })) : [];
+  // Your own payment QR, kept as the decoded text rather than an image: a few hundred bytes
+  // that sync everywhere, and redrawn cleanly whenever a summary image is made.
+  s.me = s.me && typeof s.me === "object" && typeof s.me.qr === "string" && s.me.qr
+    ? {qr:s.me.qr, name: typeof s.me.name === "string" ? s.me.name : ""} : null;
   // A purchase that has since been deleted must not leave a dangling link behind.
   for(const o of s.owed){
     if(!o.purchaseId) continue;
-    const L = s.loans.find(x => x.id === o.loanId);
-    if(!L || !isCard(L) || !(L.purchases||[]).some(pp => pp.id === o.purchaseId)){
-      o.loanId = ""; o.purchaseId = "";
-    }
+    const ok = o.loanId === BUYS_ID
+      ? s.buys.some(b => b.id === o.purchaseId)
+      : (L => L && isCard(L) && (L.purchases||[]).some(pp => pp.id === o.purchaseId))(s.loans.find(x => x.id === o.loanId));
+    if(!ok){ o.loanId = ""; o.purchaseId = ""; }
   }
   s.loans = s.loans.filter(L => L && typeof L === "object" && L.id);
   for(const L of s.loans){
