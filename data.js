@@ -43,6 +43,40 @@ function cycleFor(date, sDay, dDay){
   return {stmt: dayOf(m,sDay), due: dayOf(m,dDay)};
 }
 // A card's statements are derived from its purchases, so they can never drift apart.
+// ---------- what a loan costs ----------
+// Everything the schedule asks of you, including money already handed over on part-paid
+// instalments, which otherwise vanishes from the row once the remainder shrinks.
+const loanScheduled = L => r2((L.items||[]).reduce((s,i)=>s + i.amount + (i.partPaid||0), 0));
+// Interest needs the amount actually received: a schedule alone cannot tell interest from
+// principal. A loan from a person is interest-free, so it always costs nothing extra.
+function loanCost(L){
+  const total = loanScheduled(L);
+  if(L.fromPerson) return {total, principal:total, interest:0, markup:0, apr:0};
+  const principal = r2(L.principal);
+  if(!(principal > 0) || !(total > 0)) return null;
+  const interest = r2(total - principal);
+  return {total, principal, interest, markup: interest / principal * 100, apr: loanAPR(L, principal)};
+}
+// Effective yearly rate: the rate at which the repayments are worth exactly what you were
+// given. A markup on its own hides time — 5% over a month and 5% over a year are very
+// different loans. Assumes the money arrived one payment period before the first due date,
+// which is how instalment lenders schedule it.
+function loanAPR(L, principal){
+  const items = (L.items||[]).filter(i => i.amount + (i.partPaid||0) > 0);
+  if(!items.length) return null;
+  const first = items.map(i=>i.due).sort()[0];
+  const t0 = L.freq==="month" ? addMonths(first,-1) : addDays(first, L.freq==="2weeks" ? -14 : -7);
+  const base = new Date(t0+"T00:00:00");
+  const flows = items.map(i => ({amt: i.amount + (i.partPaid||0),
+    yrs: (new Date(i.due+"T00:00:00") - base) / 864e5 / 365}));
+  // Present value grows with the rate, so bisect for where it meets what you received.
+  const npv = a => principal - flows.reduce((s,f)=>s + f.amt / Math.pow(1+a, f.yrs), 0);
+  let lo = -0.9999, hi = 1e6;
+  if(!(npv(lo) < 0 && npv(hi) > 0)) return null;
+  for(let k=0; k<200; k++){ const mid = (lo+hi)/2; if(npv(mid) > 0) hi = mid; else lo = mid; }
+  return (lo+hi) / 2 * 100;
+}
+
 function rebuildCard(L){
   // Carry the whole previous row forward, not just its paid flag — it also holds where the
   // payment came from, which is what lets "mark unpaid" put the money back.
@@ -147,7 +181,7 @@ function demoData(){
      purchases:[{id:pur, date:addDays(today(),-2), label:"Subscription", amount:1410.39}]}),
   ], log:[], allowance:{weekday:new Date().getDay(), amount:2500, lastAdded:today()},
   people:[{id:sam, name:"Sam", brand:"#b38cff"}, {id:alex, name:"Alex", brand:"#4fd1e0"}],
-  owed:[{id:uid(), personId:sam, amount:0, note:"", loanId:card, purchaseId:pur, settled:false},
+  owed:[{id:uid(), personId:sam, amount:0, share:0.5, note:"", loanId:card, purchaseId:pur, settled:false},
         {id:uid(), personId:alex, amount:400, note:"Lunch", loanId:"", purchaseId:"", settled:false},
         {id:uid(), personId:alex, amount:250, note:"Concert ticket", loanId:"", purchaseId:"", settled:false}],
   wish:[
@@ -231,12 +265,18 @@ function migrate(s){
       if(!Array.isArray(L.purchases)) L.purchases = [];
       // Amounts come back from JSON as whatever was in the file; an un-coerced string or
       // null here turns every derived statement total into NaN.
-      L.purchases = L.purchases.filter(x => x && x.id).map(x => ({...x, amount:r2(x.amount)}));
+      // A carried remainder is a balance moved between statements, not new spending.
+      // Older data only marks it by its label, so recognise that too.
+      L.purchases = L.purchases.filter(x => x && x.id).map(x => ({...x, amount:r2(x.amount),
+        carry: !!x.carry || /^Carried from /.test(String(x.label || ""))}));
       L.sDay = +L.sDay || 9; L.dDay = +L.dDay || 19; L.limit = r2(L.limit); rebuildCard(L);
     } else {
       L.items = Array.isArray(L.items)
-        ? L.items.filter(i => i && i.due).map(i => ({...i, amount:r2(i.amount), paid:!!i.paid}))
+        ? L.items.filter(i => i && i.due).map(i => ({...i, amount:r2(i.amount), paid:!!i.paid,
+            ...(i.partPaid ? {partPaid:r2(i.partPaid)} : {})}))
         : [];
+      L.fromPerson = !!L.fromPerson;          // lent by a person: interest-free by definition
+      L.principal = r2(L.principal) || 0;     // what you actually received; 0 = not given
     }
   }
   s.assumePaid = !!s.assumePaid;

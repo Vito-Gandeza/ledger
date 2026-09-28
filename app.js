@@ -66,6 +66,9 @@ function ask(title, fields, onOk){
   f.onsubmit = () => { const data = Object.fromEntries(new FormData(f));
     setTimeout(()=>onOk($("#dlg").returnValue, data),0); };
 }
+// Every wallet, plus an explicit "paid somewhere else": payments made in the lender's own
+// app, where the wallet balance is updated by hand and deducting here would count it twice.
+const payFromOptions = () => [{v:"",t:"— nowhere, I already paid it —"}, ...allAccOptions()];
 const loanOptions = () => [{v:"",t:"— not linked —"},{v:"income",t:"Allowance pool (money comes from here)"},
   ...S.loans.map(L=>({v:L.id,t:`${L.provider} · ${L.label}`}))];
 const allAccOptions = () => S.accounts.map(a=>({v:a.id,t:`${a.parent?acc(a.parent).name+" / ":""}${a.name} (${money(a.bal)})`}));
@@ -190,18 +193,38 @@ $("#addWish").onclick = ()=>{
     logIt(`Added ${d.name} to the wishlist`); render(); });
 };
 
-$("#addLoan").onclick = ()=> ask("New instalment loan",[
-  {name:"provider",label:"Lender",value:"BillEase"},
-  {name:"label",label:"What for",required:1},
-  {name:"ref",label:"Reference #",value:""},
-  {name:"freq",label:"Schedule",type:"select",options:[{v:"week",t:"Every week"},{v:"2weeks",t:"Every 2 weeks"},{v:"month",t:"Every month"}],value:"week"},
-  {name:"amount",label:"Amount per instalment",type:"number",required:1},
-  {name:"count",label:"How many instalments",type:"number",value:"4",required:1},
-  {name:"start",label:"First due date",type:"date",value:today(),required:1}],
-  (v,d)=>{ if(v!=="ok") return;
-    S.loans.push({id:uid(), provider:d.provider||"Loan", label:d.label, ref:d.ref, freq:d.freq,
+const lenderField = L => ({name:"lender",label:"Who lent it",type:"select",value:L?.fromPerson?"person":"app",
+  options:[{v:"app",t:"A lending app or bank"},{v:"person",t:"A person (no interest)"}]});
+const principalField = L => ({name:"principal",label:"Amount you actually received",type:"number",
+  value: L?.principal || ""});
+// A loan from a person carries no interest, so the amount received means nothing there.
+function wireLoanDialog(){
+  const f = $("#dlgForm"), lender = f.querySelector('select[name="lender"]');
+  const pr = f.querySelector('input[name="principal"]');
+  const sync = ()=>{ const byPerson = lender.value === "person";
+    pr.disabled = byPerson; pr.classList.toggle("locked", byPerson); };
+  lender.onchange = sync; sync();
+}
+
+$("#addLoan").onclick = ()=>{
+  const f = [lenderField(null),
+    {name:"provider",label:"Lender's name",value:"",required:1},
+    {name:"label",label:"What for",required:1},
+    {name:"ref",label:"Reference #",value:""},
+    {name:"freq",label:"Schedule",type:"select",options:[{v:"week",t:"Every week"},{v:"2weeks",t:"Every 2 weeks"},{v:"month",t:"Every month"}],value:"week"},
+    {name:"amount",label:"Amount per instalment",type:"number",required:1},
+    {name:"count",label:"How many instalments",type:"number",value:"4",required:1},
+    {name:"start",label:"First due date",type:"date",value:today(),required:1},
+    principalField(null)];
+  f.hint = "Give the amount you actually received and the interest you are paying is worked out from the schedule.";
+  ask("New loan", f, (v,d)=>{ if(v!=="ok") return;
+    const fromPerson = d.lender === "person";
+    S.loans.push({id:uid(), provider:d.provider||(fromPerson?"A friend":"Loan"), label:d.label, ref:d.ref, freq:d.freq,
+                  fromPerson, principal: fromPerson ? 0 : (r2(d.principal)||0),
                   items:gen(d.start, +d.count, d.freq, +d.amount)});
-    logIt(`Added loan ${d.label}`); render(); });
+    logIt(`Added loan ${d.label}${fromPerson?` from ${d.provider}`:""}`); render(); });
+  wireLoanDialog();
+};
 
 $("#addCard").onclick = ()=> ask("New credit card",[
   {name:"provider",label:"Issuer",value:"Atome"},
@@ -253,7 +276,7 @@ function reorder(id, dir){
 }
 
 document.body.addEventListener("click", e=>{
-  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-allowance-claimed],[data-allowance-add],[data-xfer],[data-day],[data-edit-wish],[data-edit-owed],[data-owed-settle],[data-edit-person]");
+  const t = e.target.closest("[data-edit-acc],[data-add-kid],[data-fund],[data-mv],[data-pay],[data-unpay],[data-edit-inst],[data-del-loan],[data-extend],[data-edit-pur],[data-pay-card],[data-unpay-card],[data-edit-card],[data-link],[data-allowance-claimed],[data-allowance-add],[data-xfer],[data-day],[data-edit-wish],[data-edit-owed],[data-owed-settle],[data-edit-person],[data-mark-paid],[data-mark-card],[data-edit-loan],[data-owed-unsettle]");
   if(!t) return;
   const pick = k => { const [id,i] = (t.dataset[k]||"").split(":"); return [loan(id), +i]; };
   const pickCard = k => { const [id,key] = (t.dataset[k]||"").split(":"); return [loan(id), key]; };
@@ -318,8 +341,14 @@ document.body.addEventListener("click", e=>{
   // Marks it repaid without moving money, matching how wallet balances are kept by hand.
   if(t.dataset.owedSettle){
     const o = S.owed.find(x=>x.id===t.dataset.owedSettle); if(!o) return;
-    o.settled = true;
+    o.settled = true; o.settledOn = today();
     logIt(`${person(o.personId)?.name || "Someone"} paid back ${money(owedAmount(o))}`); render();
+  }
+
+  if(t.dataset.owedUnsettle){
+    const o = S.owed.find(x=>x.id===t.dataset.owedUnsettle); if(!o) return;
+    o.settled = false; delete o.settledOn;
+    logIt(`${money(owedAmount(o))} from ${person(o.personId)?.name || "someone"} is owed again`); render();
   }
 
   if(t.dataset.editWish){
@@ -374,20 +403,21 @@ document.body.addEventListener("click", e=>{
 
   if(t.dataset.payCard){
     const [L,due] = pickCard("payCard"), it = L.items.find(i=>i.due===due), env = envelopeFor(L.id);
-    const f = [{name:"src",label:"From",type:"select",options:allAccOptions(),value:(env||mainAcc()).id},
+    const f = [{name:"src",label:"From",type:"select",options:payFromOptions(),value:(env||mainAcc())?.id || ""},
                {name:"amount",label:"Amount",type:"number",value:it.amount}];
     f.hint = "Pay less than the statement and the rest carries to the next cycle.";
     ask(`Pay ${L.label} · ${niceY(it.due)}`, f, (v,dd)=>{ if(v!=="ok") return;
-      const a = acc(dd.src), amt = r2(dd.amount), rest = r2(it.amount - amt);
-      a.bal = r2(a.bal - amt); it.paid = true;
-      it.paidFrom = a.id; it.paidAmt = amt;
+      const a = dd.src ? acc(dd.src) : null, amt = r2(dd.amount), rest = r2(it.amount - amt);
+      if(!(amt > 0)) return;
+      if(a){ a.bal = r2(a.bal - amt); it.paidFrom = a.id; it.paidAmt = amt; }
+      it.paid = true;
       if(rest > 0){
         const carryId = uid();
-        L.purchases.push({id:carryId, date:addDays(it.due,1), label:`Carried from ${nice(it.due)}`, amount:rest});
+        L.purchases.push({id:carryId, date:addDays(it.due,1), label:`Carried from ${nice(it.due)}`, amount:rest, carry:true});
         it.carryId = carryId;   // removed again if this payment is undone
         logIt(`${L.label}: ${money(rest)} carried to the next cycle`);
       }
-      logIt(`Paid ${L.label} ${money(amt)} from ${a.name}`);
+      logIt(`Paid ${L.label} ${money(amt)} ${a ? `from ${a.name}` : "(paid outside the app)"}`);
       rebuildCard(L); render(); });
   }
   if(t.dataset.unpayCard){
@@ -398,6 +428,34 @@ document.body.addEventListener("click", e=>{
     // has to take that back out, or the balance is counted twice.
     if(it.carryId){ L.purchases = L.purchases.filter(x=>x.id!==it.carryId); delete it.carryId; }
     it.paid = false; rebuildCard(L); render();
+  }
+
+  // Paid somewhere else already: record it and move no money. The wallet figures are kept
+  // by hand, so deducting here would take the same payment out twice.
+  if(t.dataset.markPaid){
+    const [L,i] = pick("markPaid"), it = L.items[i]; if(!it) return;
+    it.paid = true;
+    logIt(`Marked ${L.label} ${niceY(it.due)} paid (${money(it.amount)})`); render();
+  }
+  if(t.dataset.markCard){
+    const [L,due] = pickCard("markCard"), it = L.items.find(i=>i.due===due); if(!it) return;
+    it.paid = true; rebuildCard(L);
+    logIt(`Marked ${L.label} statement ${niceY(due)} paid (${money(it.amount)})`); render();
+  }
+  if(t.dataset.editLoan){
+    const L = loan(t.dataset.editLoan); if(!L) return;
+    const f = [lenderField(L),
+      {name:"provider",label:"Lender's name",value:L.provider,required:1},
+      {name:"label",label:"What for",value:L.label,required:1},
+      {name:"ref",label:"Reference #",value:L.ref||""},
+      principalField(L)];
+    f.hint = `The schedule adds up to ${money(loanScheduled(L))}. Give what you actually received and the difference is the interest.`;
+    ask("Edit "+L.label, f, (v,d)=>{ if(v!=="ok") return;
+      L.fromPerson = d.lender === "person";
+      L.provider = d.provider; L.label = d.label; L.ref = d.ref;
+      L.principal = L.fromPerson ? 0 : (r2(d.principal)||0);
+      render(); });
+    wireLoanDialog();
   }
 
   if(t.dataset.fund){
@@ -467,21 +525,24 @@ document.body.addEventListener("click", e=>{
 
   if(t.dataset.pay){
     const [L,i] = pick("pay"), it = L.items[i], env = envelopeFor(L.id);
-    const f = [{name:"src",label:"From",type:"select",options:allAccOptions(),value:(env||mainAcc()).id},
+    const f = [{name:"src",label:"From",type:"select",options:payFromOptions(),value:(env||mainAcc())?.id || ""},
                {name:"amount",label:"Amount",type:"number",value:it.amount}];
     f.hint = "Pay less than the instalment and the rest stays owed on this date.";
     ask(`Pay ${L.label}`, f,
       (v,dd)=>{ if(v!=="ok") return;
-        const a = acc(dd.src), amt = r2(dd.amount);
+        const a = dd.src ? acc(dd.src) : null, amt = r2(dd.amount);
         if(!(amt > 0)) return;
-        a.bal = r2(a.bal - amt);
+        if(a) a.bal = r2(a.bal - amt);
+        const from = a ? `from ${a.name}` : "(paid outside the app)";
         if(amt < it.amount){
           it.amount = r2(it.amount - amt); // still unpaid, just smaller
-          logIt(`Part-paid ${L.label} ${money(amt)} from ${a.name} · ${money(it.amount)} still due ${nice(it.due)}`);
+          // Kept so the schedule's full cost, and so its interest, still adds up.
+          it.partPaid = r2((it.partPaid||0) + amt);
+          logIt(`Part-paid ${L.label} ${money(amt)} ${from} · ${money(it.amount)} still due ${nice(it.due)}`);
         } else {
           it.paid = true; it.amount = amt;
-          it.paidFrom = a.id; it.paidAmt = amt;   // so marking it unpaid can undo the money too
-          logIt(`Paid ${L.label} ${money(amt)} from ${a.name}`);
+          if(a){ it.paidFrom = a.id; it.paidAmt = amt; }   // so marking it unpaid can undo the money too
+          logIt(`Paid ${L.label} ${money(amt)} ${from}`);
         }
         render(); });
   }
@@ -992,6 +1053,57 @@ function demo(){
   ok(migrate({accounts:[],loans:[],log:[],wish:[],owed:[null,{}],people:[null]}).owed.length===0, "junk entries are dropped");
   ok(migrate({accounts:[],loans:[],log:[],wish:[],people:[],owed:[{id:"x",who:"A",amount:"12.5"}]}).owed[0].amount===12.5,
      "string amounts are coerced");
+
+  // --- what a loan costs ---
+  const lendL = {id:"I",provider:"App",label:"Phone",ref:"",freq:"month",principal:1000,
+                 items:gen("2026-01-15",12,"month",100)};
+  const lc = loanCost(lendL);
+  ok(lc.total===1200 && lc.interest===200, "interest is the schedule less what you received", lc);
+  ok(Math.round(lc.markup)===20, "markup is interest over what you received", lc.markup);
+  // the yearly rate is whatever makes the repayments worth exactly what you received
+  const t0 = new Date(addMonths("2026-01-15",-1)+"T00:00:00");
+  const pv = lendL.items.reduce((acc,i)=>acc + i.amount / Math.pow(1+lc.apr/100,
+    (new Date(i.due+"T00:00:00")-t0)/864e5/365), 0);
+  ok(Math.abs(pv-1000) < 0.01, "the yearly rate discounts the schedule back to the amount received", {apr:lc.apr, pv});
+  ok(lc.apr > lc.markup, "a year-long 20% markup paid monthly costs more than 20% a year", lc.apr);
+  ok(loanCost({...lendL, principal:1200}).interest===0 && Math.abs(loanCost({...lendL, principal:1200}).apr) < 1e-6,
+     "a schedule that only returns what you received costs nothing");
+  ok(loanCost({...lendL, principal:0})===null, "no amount received means the cost is unknown, not zero");
+  ok(loanCost({...lendL, fromPerson:true}).interest===0 && loanCost({...lendL, fromPerson:true}).apr===0,
+     "a loan from a person is interest-free whatever you entered");
+  const partL = {...lendL, items:[{due:"2026-02-15",amount:40,partPaid:60,paid:false}], principal:90};
+  ok(loanScheduled(partL)===100, "money handed over on a part-paid instalment still counts toward the cost");
+  const mig = migrate({accounts:[],log:[],wish:[],owed:[],people:[],
+    loans:[{id:"L",freq:"week",fromPerson:"yes",principal:"500",items:[{due:"2026-01-01",amount:5}]}]}).loans[0];
+  ok(mig.fromPerson===true && mig.principal===500, "person flag and amount received are coerced");
+
+  // --- how much of a card is really yours ---
+  S = {v:DATA_V, log:[], wish:[], allowance:null, assumePaid:false,
+       accounts:[{id:"m",parent:null,name:"Main",kind:"gotyme",bal:0,loanId:""}],
+       people:[{id:"s",name:"Sam",brand:""},{id:"a",name:"Alex",brand:""}],
+       loans:[rebuildCard({id:"C",provider:"C",label:"Card",ref:"",freq:"card",limit:9000,sDay:9,dDay:19,items:[],
+         purchases:[{id:"P1",date:today(),label:"Dinner",amount:1000},
+                    {id:"P2",date:today(),label:"Mine",amount:500},
+                    {id:"PC",date:today(),label:"Carried from Aug 19",amount:200,carry:true}]})],
+       owed:[{id:"o1",personId:"s",amount:0,share:0.5,note:"",loanId:"C",purchaseId:"P1",settled:false},
+             {id:"o2",personId:"a",amount:0,share:0.25,note:"",loanId:"C",purchaseId:"P1",settled:true}]};
+  ok(othersShare(S.loans[0], S.loans[0].purchases[0])===750, "every share on a purchase counts, settled or not");
+  const sp = cardSplit(S.loans[0]);
+  ok(sp.out===1700 && sp.outOthers===750 && sp.outMine===950, "outstanding splits into yours and others'", sp);
+  ok(sp.spent===1500 && sp.spentMine===750, "all-time spend leaves carried remainders out", sp);
+  S.owed.push({id:"o3",personId:"s",amount:0,share:1,note:"",loanId:"C",purchaseId:"P1",settled:false});
+  ok(othersShare(S.loans[0], S.loans[0].purchases[0])===1000, "an over-recorded split is capped at the purchase");
+  ok(migrate({accounts:[],log:[],wish:[],owed:[],people:[],loans:[{id:"C",freq:"card",limit:1,sDay:9,dDay:19,
+     purchases:[{id:"x",date:"2026-01-01",label:"Carried from Dec 19",amount:5}]}]}).loans[0].purchases[0].carry===true,
+     "older carried remainders are recognised by their label");
+
+  // --- paid-back history ---
+  S.owed.pop();
+  const led = owedLedger();
+  const samL = led.find(g=>g.who.name==="Sam"), alexL = led.find(g=>g.who.name==="Alex");
+  ok(samL.ever===500 && samL.back===0 && samL.left===500, "an open debt is all still to come back", samL);
+  ok(alexL.ever===250 && alexL.back===250 && alexL.left===0, "a settled one fills the bar", alexL);
+  ok(owedToMe()===500, "only open debts count as still owed");
 
   ok(r2(0.1+0.2)===0.3, "rounding");
   S = save0; undoStack = []; suppressHistory = false;

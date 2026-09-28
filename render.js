@@ -210,13 +210,16 @@ function renderCards(){
             <span class="sub">${isOpen?`closes ${nice(it.stmt)} · `:""}pay by ${niceY(it.due)}</span></span>
           <span class="num">${money(it.amount)}</span></div>
         <div class="sub ${cls}">${isOpen && !it.paid ? "not billed yet" : when}</div>
-        ${purchasesIn(L,it.due).map(p=>`<div class="pur">
+        ${purchasesIn(L,it.due).map(p=>{ const oth = othersShare(L,p); return `<div class="pur">
             <span class="sub" style="width:52px">${nice(p.date)}</span>
-            <span class="grow">${esc(p.label)}</span>
+            <span class="grow">${esc(p.label)}${oth>0
+              ? `<span class="sub ok" style="display:block">${esc(whoShares(L,p).join(", "))} owe${whoShares(L,p).length>1?"":"s"} ${money(oth)} &middot; yours ${money(r2(p.amount-oth))}</span>` : ""}</span>
             <span class="num">${money(p.amount)}</span>
-            <button class="iconbtn" data-edit-pur="${L.id}:${p.id}">edit</button></div>`).join("")}
+            <button class="iconbtn" data-edit-pur="${L.id}:${p.id}">edit</button></div>`; }).join("")}
         ${it.paid ? `<button class="btn mini" data-unpay-card="${L.id}:${it.due}" style="margin-top:9px">mark unpaid</button>`
-                  : `<button class="btn ${isOpen?"mini":"primary"}" data-pay-card="${L.id}:${it.due}" style="margin-top:9px">Pay ${money(it.amount)}</button>`}
+                  : `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
+                      <button class="btn ${isOpen?"mini":"primary"}" data-pay-card="${L.id}:${it.due}">Pay ${money(it.amount)}</button>
+                      <button class="btn mini" data-mark-card="${L.id}:${it.due}" title="Already paid — mark it without moving any money">&#10003; Paid</button></div>`}
       </div>`;
     };
 
@@ -237,6 +240,17 @@ function renderCards(){
             <span class="ccright">Billed ${ord(L.sDay)} · due ${ord(L.dDay)}</span></div>
         </div>
         <div class="cardmeta">
+          ${(()=>{ const sp = cardSplit(L);
+            // The split is the answer to "how much of this is really mine". Shown whenever
+            // anything is shared; otherwise the all-time line alone, which is still useful.
+            const bar = sp.out > 0 && sp.outOthers > 0 ? `<div class="splitbar" title="yours / others'">
+                <i class="mine" style="width:${(sp.outMine/sp.out*100).toFixed(1)}%"></i>
+                <i class="theirs" style="width:${(sp.outOthers/sp.out*100).toFixed(1)}%"></i></div>` : "";
+            return (sp.outOthers > 0 ? `<div class="splitline"><span><b>${money(sp.outMine)}</b> yours to pay</span>
+                <span class="ok">${money(sp.outOthers)} others&rsquo;</span></div>${bar}` : "")
+              + (sp.spent > 0 ? `<div class="sub" style="margin-bottom:6px">All time: ${money(sp.spent)} on this card${
+                  sp.spentOthers > 0 ? ` &middot; <b style="color:var(--fg)">${money(sp.spentMine)}</b> of it yours` : ""}</div>` : "");
+          })()}
           ${env?`<div class="sub">Funded by ${esc(env.name)}</div>`:""}
           ${out? `<div class="sub" style="margin-top:4px">
             ${billed? `<i class="dot" style="background:var(--accent);display:inline-block;vertical-align:middle;margin-right:4px"></i>${money(billed)} billed &amp; unpaid`:""}
@@ -256,34 +270,62 @@ function renderCards(){
   }).join("");
 }
 
+const pctTxt = v => (v === null || v === undefined || !Number.isFinite(v)) ? "—"
+  : `${Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)}%`;
+
 function renderLoans(){
   const list = S.loans.filter(L=>!isCard(L));
-  $("#loans").innerHTML = list.map(L=>{
+  // Across every loan whose cost is known: what the interest adds up to, and on what.
+  const costs = list.map(L => ({L, c: loanCost(L)}));
+  const known = costs.filter(x => x.c && !x.L.fromPerson);
+  const totalInterest = r2(known.reduce((s,x)=>s + x.c.interest, 0));
+  const unknown = costs.filter(x => !x.c).length;
+  const note = $("#loanNote");
+  if(note) note.innerHTML = known.length
+    ? `<b class="${totalInterest>0?"warn":""}">${money(totalInterest)}</b> interest across ${plural(known.length,"loan")}${unknown?` &middot; ${unknown} without an amount received`:""}`
+    : unknown ? `Add what you received to see the interest` : "";
+
+  $("#loans").innerHTML = costs.map(({L, c})=>{
     const left = unpaid(L), next = left[0], env = envelopeFor(L.id);
     const n = next ? daysTo(next.due) : null;
     const cls = !next ? "" : n<0 ? "bad" : n<=3 ? "warn" : "dim";
     const when = !next ? "cleared" : n<0 ? `${-n}d overdue` : n===0 ? "due today" : `in ${n}d`;
+    const costLine = L.fromPerson ? `<span class="pill">personal</span> no interest`
+      : c ? `${money(c.interest)} interest &middot; ${pctTxt(c.markup)} on top${c.apr!==null?` &middot; &asymp;${pctTxt(c.apr)} a year`:""}`
+      : `<span class="dim">add what you received to see the interest</span>`;
+    // What you borrowed against what it costs, on one bar: the interest is the part of the
+    // bar that was never money you got to use.
+    const costBar = c && !L.fromPerson && c.total > 0 ? `<div class="inst" style="display:block">
+        <div class="splitbar" style="margin:2px 0 6px">
+          <i class="mine" style="width:${Math.min(100, c.principal/c.total*100).toFixed(1)}%"></i>
+          <i class="interest" style="width:${Math.max(0, c.interest/c.total*100).toFixed(1)}%"></i></div>
+        <div class="splitline sub"><span>${money(c.principal)} received</span>
+          <span class="warn">+${money(c.interest)} interest = ${money(c.total)}</span></div></div>` : "";
     return `<details><summary class="row">
       <span class="dot" style="background:${colorOf(L)}"></span>
       <div class="grow"><div class="name"><span class="chev">›</span> ${esc(L.provider)} · ${esc(L.label)}</div>
-        <div class="sub ${cls}">${next?`next ${niceY(next.due)} · ${when}`:"all paid"} · ${L.items.length-left.length}/${L.items.length} paid${env?` · ${esc(env.name)}`:""}</div></div>
+        <div class="sub ${cls}">${next?`next ${niceY(next.due)} · ${when}`:"all paid"} · ${L.items.length-left.length}/${L.items.length} paid${env?` · ${esc(env.name)}`:""}</div>
+        <div class="sub">${costLine}</div></div>
       <div class="amt num">${next?money(next.amount):"—"}</div>
       <div class="sub num" style="width:76px;text-align:right">${money(r2(left.reduce((s,i)=>s+i.amount,0)))}</div>
       </summary>
       <div class="inst" style="border-top-style:solid">
         <span class="grow sub">${esc(L.ref||"no ref")} · every ${L.freq==="2weeks"?"2 weeks":L.freq}</span>
+        <button class="btn mini" data-edit-loan="${L.id}">Edit</button>
         <button class="btn mini" data-link="${L.id}">${env?`⇄ ${esc(env.name)}`:"link a wallet"}</button>
         <button class="btn mini" data-extend="${L.id}">+ extend</button>
         <button class="btn mini" data-del-loan="${L.id}">delete</button>
       </div>
+      ${costBar}
       ${L.items.map((it,i)=>{
         const dn = daysTo(it.due);
-        const c = it.paid ? "dim" : dn<0 ? "bad" : dn<=3 ? "warn" : "";
+        const cl = it.paid ? "dim" : dn<0 ? "bad" : dn<=3 ? "warn" : "";
         return `<div class="inst" style="${it.paid?"opacity:.45":""}">
-          <span class="grow ${c}">${niceY(it.due)}</span>
+          <span class="grow ${cl}">${niceY(it.due)}${it.partPaid?` <span class="sub">(${money(it.partPaid)} paid so far)</span>`:""}</span>
           <span class="num">${money(it.amount)}</span>
           ${it.paid?`<button class="iconbtn" data-unpay="${L.id}:${i}">undo</button>`
-                   :`<button class="btn mini" data-pay="${L.id}:${i}">Pay</button>`}
+                   :`<button class="btn mini" data-mark-paid="${L.id}:${i}" title="Already paid — mark it without moving any money">&#10003; Paid</button>
+                     <button class="btn mini" data-pay="${L.id}:${i}">Pay</button>`}
           <button class="iconbtn" data-edit-inst="${L.id}:${i}">edit</button>
         </div>`;}).join("")}
       </details>`;
@@ -587,6 +629,31 @@ function isPassThrough(o){
   return !!it && !it.paid;
 }
 const owedOnCard = () => r2(receivables().filter(isPassThrough).reduce((s,o) => s + owedAmount(o), 0));
+// Everybody else's part of one purchase. Counts every debt ever recorded against it, settled
+// or not — a bill you split was never your spending, whether or not they have paid yet.
+// Capped at the purchase so an over-recorded split cannot make your part negative.
+function othersShare(L, pu){
+  const theirs = S.owed.filter(o => o.loanId===L.id && o.purchaseId===pu.id)
+                       .reduce((s,o)=>s + owedAmount(o), 0);
+  return r2(Math.min(pu.amount, theirs));
+}
+const whoShares = (L, pu) => S.owed.filter(o => o.loanId===L.id && o.purchaseId===pu.id)
+  .map(o => person(o.personId)?.name).filter(Boolean);
+// What is still to pay on a card, and what you have spent on it all time — each split into
+// your part and everyone else's. Carried remainders are left out of the all-time figure:
+// they are a balance moved between statements, and counting them bills the same peso twice.
+function cardSplit(L){
+  const out = outstanding(L);
+  let outOthers = 0;
+  for(const it of unpaid(L))
+    for(const pu of purchasesIn(L, it.due)) if(!pu.carry) outOthers += othersShare(L, pu);
+  outOthers = r2(Math.min(out, outOthers));
+  const real = (L.purchases||[]).filter(pu => !pu.carry);
+  const spent = r2(real.reduce((s,pu)=>s + pu.amount, 0));
+  const spentOthers = r2(real.reduce((s,pu)=>s + othersShare(L, pu), 0));
+  return {out, outOthers, outMine: r2(out - outOthers), spent, spentOthers, spentMine: r2(spent - spentOthers)};
+}
+
 // Debts grouped under the person who owes them, biggest debtor first.
 function owedByPerson(){
   const groups = new Map();
@@ -692,6 +759,7 @@ function renderCatch(){
             <div class="sub bad">${plural(-daysTo(it.due), "day")} late</div></div>
           <div class="amt num">${money(it.amount)}</div>
           <div class="rowacts">
+            <button class="btn mini" data-${isCard_?`mark-card="${g.L.id}:${it.due}`:`mark-paid="${g.L.id}:${i}`}" title="Already paid — mark it without moving any money">&#10003; Paid</button>
             <button class="btn mini primary" data-${isCard_?`pay-card="${g.L.id}:${it.due}`:`pay="${g.L.id}:${i}`}">Pay</button>
           </div>
         </div>`;
@@ -699,52 +767,68 @@ function renderCatch(){
     }).join("");
 }
 
+// Per person, across everything ever recorded: what they have owed you, what has come back,
+// and what is still out. Settled debts count here — they are the history the bars fill with.
+function owedLedger(){
+  const map = new Map();
+  for(const o of S.owed){
+    const who = person(o.personId); if(!who) continue;
+    if(!map.has(who.id)) map.set(who.id, {who, ever:0, back:0, open:[], done:[]});
+    const g = map.get(who.id), amt = owedAmount(o);
+    g.ever = r2(g.ever + amt);
+    if(o.settled){ g.back = r2(g.back + amt); g.done.push(o); } else g.open.push(o);
+  }
+  return [...map.values()].map(g => ({...g, left: r2(g.ever - g.back)}));
+}
+
 function renderOwed(){
   const box = $("#owedList"); if(!box) return;
-  const groups = owedByPerson();
-  const total = owedToMe(), onCard = owedOnCard();
-  const assets = r2(S.accounts.reduce((s,a)=>s+a.bal,0));
-  const owedOut = r2(S.loans.reduce((s,L)=>s+unpaid(L).reduce((t,i)=>t+i.amount,0),0));
-  const now = r2(assets - owedOut), after = r2(now + total);
+  const all = owedLedger();
+  const active = all.filter(g => g.left > 0).sort((a,b) => b.left - a.left);
+  const ever = r2(all.reduce((s,g)=>s + g.ever, 0));
+  const back = r2(all.reduce((s,g)=>s + g.back, 0));
+  const left = owedToMe(), onCard = owedOnCard();
 
   const note = $("#owedNote");
-  if(note) note.textContent = groups.length ? `${groups.length} ${groups.length>1?"people":"person"}` : "";
+  if(note) note.textContent = active.length ? `${active.length} ${active.length===1?"person":"people"}` : "";
 
-  if(!groups.length){
-    box.innerHTML = `<div class="empty">Nobody owes you anything right now. Add a debt here and the difference it makes to your position shows above.</div>`;
+  if(!all.length){
+    box.innerHTML = `<div class="empty">Nobody owes you anything right now. Add a debt here and it shows how much of it has come back.</div>`;
     return;
   }
 
-  // The point of the section: what the headline number says versus what it will say once
-  // these land. Both bars share a scale, so the gap between them is the message.
-  const span = Math.max(Math.abs(now), Math.abs(after), 1);
-  const bar = (v, cls) => `<div class="track"><i class="${cls}" style="width:${(Math.abs(v)/span*100).toFixed(1)}%"></i></div>`;
+  // One bar per person, filling toward the total they have ever owed you. The previous pair
+  // of net-position bars differed by a few percent on a scale of thousands, so the only
+  // thing they visibly said was "both negative".
+  const progress = (b, e, tint) => `<div class="owedbar"><i style="width:${e>0?Math.min(100,b/e*100).toFixed(1):0}%;background:${tint}"></i></div>`;
 
-  box.innerHTML = `<div class="owedviz">
-      <div class="owedrow"><span class="lbl">Right now</span>
-        ${bar(now, now<0?"neg":"pos")}<span class="num ${now<0?"bad":""}">${money(now)}</span></div>
-      <div class="owedrow"><span class="lbl">Once they pay</span>
-        ${bar(after, after<0?"neg":"pos")}<span class="num ${after<0?"bad":"ok"}">${money(after)}</span></div>
-      <div class="owedsum"><span>${money(total)} coming back to you</span>
-        ${onCard>0?`<span class="sub">${money(onCard)} of it already on a card</span>`:""}</div>
-    </div>`
-    + groups.map(g=>{
-      const tint = g.who.brand || "var(--accent)";
-      return `<div class="row head-row">
+  const head = `<div class="owedviz">
+      <div class="eyebrow">Still coming back to you</div>
+      <div class="catchbig num ok">${money(left)}</div>
+      ${progress(back, ever, "var(--good)")}
+      <div class="splitline sub"><span>${money(back)} of ${money(ever)} paid back</span>
+        <span>${ever>0?Math.round(back/ever*100):0}%</span></div>
+      ${onCard>0?`<div class="sub" style="margin-top:6px">${money(onCard)} of what is outstanding is already on a card</div>`:""}
+    </div>`;
+
+  const openRows = active.map(g=>{
+    const tint = g.who.brand || "var(--accent)";
+    return `<div class="row head-row" style="align-items:flex-start">
         <span class="ico" style="background:color-mix(in srgb,${tint} 18%,transparent);color:${tint}">${
           esc(g.who.name.trim()[0] || "?").toUpperCase()}</span>
         <div class="grow"><div class="name">${esc(g.who.name)}</div>
-          <div class="sub">${g.items.length} ${g.items.length>1?"debts":"debt"}</div></div>
-        <div class="amt num ok">${money(g.total)}</div>
+          ${progress(g.back, g.ever, tint)}
+          <div class="sub">${money(g.back)} of ${money(g.ever)} back &middot; ${plural(g.open.length,"debt")} open</div></div>
+        <div class="amt num ok">${money(g.left)}</div>
         <div class="rowacts">
           <button class="iconbtn" data-edit-person="${g.who.id}" aria-label="Edit person">Edit</button>
         </div>
-      </div>` + g.items.map(o=>{
+      </div>` + g.open.map(o=>{
         const link = purchaseOf(o);
         return `<div class="row kid">
           <div class="grow"><div class="name">${esc(owedLabel(o) || "No description")}</div>
             ${link?`<div class="sub"><span class="pill due">on ${esc(link.L.label)}</span> ${
-             shareOf(o) > 0 && !near(shareOf(o),1) ? `${shareLabel(shareOf(o))}${money(link.pu.amount)} &middot; ` : ""}${nice(link.pu.date)}</div>`
+               shareOf(o) > 0 && !near(shareOf(o),1) ? `${shareLabel(shareOf(o))}${money(link.pu.amount)} &middot; ` : ""}${nice(link.pu.date)}</div>`
                   :`<div class="sub">not on a card</div>`}</div>
           <div class="amt num">${money(owedAmount(o))}</div>
           <div class="rowacts">
@@ -753,7 +837,30 @@ function renderOwed(){
           </div>
         </div>`;
       }).join("");
-    }).join("");
+  }).join("") || `<div class="empty">Everyone has paid you back.</div>`;
+
+  // Paid-back history: never deleted, just folded away. Newest first.
+  const done = S.owed.filter(o=>o.settled)
+    .sort((a,b)=> (b.settledOn||"") < (a.settledOn||"") ? -1 : 1);
+  const history = done.length ? `<details class="fold">
+      <summary class="foldhead"><span class="chev">&rsaquo;</span>
+        <span class="grow">${plural(done.length,"debt")} paid back</span>
+        <span class="sub num ok">${money(back)}</span></summary>
+      <div class="owedviz" style="border-top:1px solid var(--line-soft)">
+        ${all.filter(g=>g.back>0).sort((a,b)=>b.back-a.back).map(g=>`
+          <div class="owedrow"><span class="lbl">${esc(g.who.name)}</span>
+            <div class="track"><i class="pos" style="width:${(g.back/Math.max(...all.map(x=>x.back),1)*100).toFixed(1)}%"></i></div>
+            <span class="num ok">${money(g.back)}</span></div>`).join("")}
+      </div>
+      ${done.map(o=>`<div class="row kid">
+        <div class="grow"><div class="name">${esc(person(o.personId)?.name || "Someone")} &middot; ${esc(owedLabel(o) || "No description")}</div>
+          <div class="sub">${o.settledOn ? `paid back ${niceY(o.settledOn)}` : "paid back"}</div></div>
+        <div class="amt num dim">${money(owedAmount(o))}</div>
+        <div class="rowacts"><button class="iconbtn" data-owed-unsettle="${o.id}">Undo</button></div>
+      </div>`).join("")}
+    </details>` : "";
+
+  box.innerHTML = head + openRows + history;
 }
 
 function renderWish(){

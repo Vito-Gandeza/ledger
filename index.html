@@ -372,6 +372,19 @@ dialog h3{margin-bottom:20px}
 .catchhead{padding:20px; border-bottom:1px solid var(--line-soft)}
 .catchbig{font-size:32px; font-weight:600; letter-spacing:-.03em; line-height:1.1; margin:4px 0 6px}
 
+/* Two-part bars: yours vs others' on a card, received vs interest on a loan. */
+.splitbar{display:flex; height:8px; border-radius:var(--pill); overflow:hidden;
+  background:color-mix(in srgb, var(--fg) 8%, transparent); margin:8px 0 6px}
+.splitbar i{display:block; height:100%; transition:width .7s var(--ease)}
+.splitbar .mine{background:var(--accent)}
+.splitbar .theirs{background:var(--good)}
+.splitbar .interest{background:var(--warn)}
+.splitline{display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:14px}
+/* Progress toward what someone owes you: it fills as they pay you back. */
+.owedbar{height:7px; border-radius:var(--pill); overflow:hidden; margin:7px 0 5px; max-width:320px;
+  background:color-mix(in srgb, var(--fg) 10%, transparent)}
+.owedbar i{display:block; height:100%; border-radius:var(--pill); transition:width .7s var(--ease)}
+
 /* ---------- owed to you ---------- */
 .owedviz{padding:18px 16px 16px; border-bottom:1px solid var(--line-soft)}
 .owedrow{display:flex; align-items:center; gap:12px; margin-bottom:10px}
@@ -382,11 +395,6 @@ dialog h3{margin-bottom:20px}
 .owedrow .track i.neg{background:var(--bad)}
 .owedrow .track i.pos{background:var(--good)}
 .owedrow .num{flex:none; font-weight:600; font-size:15px}
-/* The headline and its qualifier stack rather than sharing a line — wrapping mid-phrase
-   split "coming back to you" around the note beside it. */
-.owedsum{display:flex; flex-direction:column; gap:3px; font-size:14px;
-  font-weight:600; padding-top:10px; border-top:1px solid var(--line-soft); margin-top:14px}
-.owedsum .sub{font-weight:400}
 
 /* ---------- wishlist ----------
    A ring rather than another bar: this section is about motivation, and it should not
@@ -550,7 +558,8 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
     </section>
 
     <section class="a-loans">
-      <div class="shead"><h2>Instalment loans</h2><button class="btn" id="addLoan">+ Loan</button></div>
+      <div class="shead"><h2>Instalment loans</h2>
+        <div class="acts"><span class="sub" id="loanNote"></span><button class="btn" id="addLoan">+ Loan</button></div></div>
       <div class="card" id="loans"></div>
     </section>
   </div>

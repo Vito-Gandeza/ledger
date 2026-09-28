@@ -12,6 +12,13 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
 - **Wallets with sections.** A main bank wallet holds named sub-sections ("envelopes") whose money
   the main wallet cannot spend until you move it. Reorderable. One section is marked the allowance
   pool — the place your income lands and every top-up is drawn from.
+- **Paid elsewhere.** Every instalment and statement has a one-tap "Paid" that records the
+  payment without moving any money, for when you paid in the lender's own app and update your
+  wallets by hand. The Pay dialog has the same choice as its first source.
+- **Loans from people, and what loans cost.** A loan can come from an app or a person. Give an
+  app loan the amount you actually received and it shows the interest, the markup on top, and
+  an effective yearly rate — the markup alone hides time, and 16% over ten weeks is a very
+  different loan from 16% over a year. A loan from a person is interest-free.
 - **Instalment loans.** Weekly, fortnightly or monthly schedules. Link a loan to a section and the
   section reports how far it stretches: `Covers 12/14 · ₱67.55 more covers all 14`.
 - **Credit cards.** Drawn as an actual card in the issuer's colour, with your own logo if you
@@ -20,13 +27,18 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
   Partial payments carry the remainder forward.
 - **Fund the envelopes.** Given a window, it computes the per-envelope top-up needed, ordered by
   which loan bites first, and applies the transfers in one click.
+- **How much of a card is yours.** Each card splits what is still to pay, and everything
+  ever spent on it, into your part and everyone else's, using the debts linked to its
+  purchases. Carried-forward remainders are left out of the all-time figure, since they are a
+  balance moved between statements rather than new spending.
 - **Owed to you.** Debts other people owe you, grouped under a profile per person so several
   debts from the same person stay together. A debt can be linked to the card purchase you
   fronted it on, in which case its amount and description come from that purchase and follow
   any edit to it. If you only covered part of a shared bill, set their share — half, a third,
   a quarter, or an amount you type — and the share follows the purchase too. Because a card-backed debt is already counted as a liability, the section
-  shows your position now against what it becomes once everyone pays — the headline number
-  never moves until the money is actually in a wallet.
+  never moves the headline number until the money is actually in a wallet. Each person has a
+  bar filling toward everything they have owed you, and debts that have been paid back fold
+  away into a history — with who paid what back — rather than disappearing.
 - **Assume settled.** A switch in the header recomputes every stock of money in the app as if
   the debts owed to you had been paid. Cash someone owes you becomes spendable; something you
   fronted on a card does not, because that repayment goes straight back out to the card — it
