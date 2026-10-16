@@ -25,7 +25,7 @@ function norm(p){
     set[k] = typeof SET0[k] === "boolean" ? !!p.set[k] : (Number.isFinite(+p.set[k]) && +p.set[k] >= 0 ? +p.set[k] : SET0[k]);
   set.every = Math.min(26, Math.max(1, Math.round(set.every)));
   set.years = Math.min(50, Math.max(1, Math.round(set.years)));
-  return {v:1, set,
+  return {v:1, set, chosen:!!p.chosen,   // chosen: the plan was picked by you, not left at the default
     targets: Array.isArray(p.targets)
       ? p.targets.filter(t => t && SYM.test(t.sym) && +t.pct > 0).map(t => ({sym:t.sym, pct:+t.pct}))
       : [{sym:"VOO", pct:100}],
@@ -191,17 +191,27 @@ const kName = k => k === 1 ? "Every week" : k === 4 ? "Every 4 weeks (~monthly)"
 // ---------- projection ----------
 // Week by week: the set-aside piles up, then lands every k weeks minus the fee and the spread.
 // Value is in pesos at today's rate; the future peso/dollar rate is unknowable, so it is held flat.
-function project(startVal, startIn){
-  const {weekly:W, every:k, ret, years, fee, spread} = P.set, g = Math.pow(1 + ret/100, 1/52);
-  let val = startVal, put = startIn, held = 0;
-  const pts = [{y:0, val, put}];
-  for(let w = 1; w <= years * 52; w++){
-    val *= g; held += W;
-    if(w % k === 0 && held > fee){ put += held; val += (held - fee) / (1 + spread/100); held = 0; }
-    if(w % 52 === 0) pts.push({y:w/52, val:r2(val + held), put:r2(put + held)});
+// One entry per week: inv is what sits in funds, held is set-aside cash not yet deposited.
+function simulate(weeks, startVal, startIn){
+  const {weekly:W, every:k, ret, fee, spread} = P.set, g = Math.pow(1 + ret/100, 1/52);
+  let inv = startVal, put = startIn, held = 0;
+  const out = [{inv, held, val:inv, put}];
+  for(let w = 1; w <= weeks; w++){
+    inv *= g; held += W;
+    if(w % k === 0 && held > fee){ put += held; inv += (held - fee) / (1 + spread/100); held = 0; }
+    out.push({inv, held, val:inv + held, put:put + held});
   }
-  return pts;
+  return out;
 }
+// Every 4th week for the chart, tagged with its year (w/52) and calendar date.
+function project(startVal, startIn){
+  return simulate(P.set.years * 52, startVal, startIn)
+    .map((p,w) => ({...p, w, y:w/52, date:addDays(today(), Math.round(w * 365.25 / 52))})).filter(p => p.w % 4 === 0);
+}
+// Pesos you'd actually get if you withdrew everything at week w: spread out, $5 fee, plus the
+// set-aside cash that never left the bank.
+const takeHome = p => Math.max(0, p.inv * (1 - P.set.spread/100) - (p.inv > 0 ? P.set.wdFee * sellRate() : 0)) + p.held;
+const monthYear = d => new Date(d + "T00:00:00").toLocaleDateString("en-PH",{month:"short", year:"numeric"});
 
 // ---------- buy plan ----------
 // Splits cash so holdings move toward the plan's weights (rebalancing by buying, never by
@@ -232,13 +242,16 @@ function draw(){
   $("#hVal").textContent = fx ? php0(valPhp) : usd(w.total);
   $("#hSub").innerHTML = P.tx.length
     ? `${usd(w.total)} on Gotrade · ${fx ? `<span class="${tone(gain)}">${gain >= 0 ? "+" : ""}${php0(gain)}</span> vs the ${php0(b.phpIn)} you put in` : ""}`
-    : "Nothing logged yet. Log your first deposit under Activity.";
+    : "Nothing yet. Follow the steps under “What to do next” to make your first investment.";
   $("#hSplit").innerHTML = [
-    ["Invested", usd(w.val)], ["Cash on Gotrade", usd(b.cash)],
-    ["If withdrawn today", fx ? php0(out) : "—"], ["Dividends", usd(b.divs)],
+    ["You put in", php0(b.phpIn)], ["Growth so far", fx && P.tx.length ? `<span class="${tone(gain)}">${gain >= 0 ? "+" : ""}${php0(gain)}</span>` : "—"],
+    ["If you took it all out today", fx ? php0(out) : "—"], ["Dividends received", usd(b.divs)],
   ].map(([k,v]) => `<div><div class="eyebrow">${k}</div><div class="v num">${v}</div></div>`).join("");
 
   drawCoach(b, L);
+  drawFlow(b, w, L);
+  drawPlan();
+  drawGoals(valPhp || 0);
   drawNow(L);
   drawBuy(b);
   drawHold(b, w);
@@ -263,10 +276,23 @@ function drawCoach(b, L){
         ? ["ok", "Deposit", `Deposit <b>${money(amt)}</b> now${mid() ? ` — about <b>${usd(depositQuote(amt).usd)}</b> after the ₱${P.set.fee} fee at ~${money(buyRate())}/$` : ""}. Then log it here.`]
         : ["dim", "Wait", `Your next deposit is due, but there isn't ${money(P.set.minDep)} free to deposit yet.`]);
     } else {
-      tips.push(["dim", "Next", `Next deposit <b>${niceY(next)}</b> (every ${plural(k, "week")}). Set aside ${money(W)} a week until then${L.aside.length ? ` — ${money(L.asideBal)} in your ${esc(L.aside[0].name)} section so far` : ""}.`]);
+      // With a Gotrade section in Ledger, show how full the next deposit already is.
+      const fill = L.aside.length ? Math.min(100, L.asideBal / batch * 100) : null;
+      tips.push(["dim", "Next", `Next deposit <b>${niceY(next)}</b> (in ${plural(daysTo(next), "day")}, every ${plural(k, "week")}). Set aside ${money(W)} a week until then.`
+        + (fill != null ? `<div class="progress" role="img" aria-label="${Math.round(fill)}% of the next deposit set aside"><i style="width:${fill}%"></i></div>
+          <div class="sub" style="margin-top:6px">${money(L.asideBal)} of ${money(batch)} set aside in your ${esc(L.aside[0].name)} section</div>` : "")]);
     }
   }
-  $("#coach").innerHTML = tips.map(([c,l,t]) => `<div class="tip ${c === "ok" ? "" : c}"><span class="lbl">${l}</span>${t}</div>`).join("");
+  // Until the first buy is logged, a numbered checklist explains the whole loop once.
+  const bought = P.tx.some(t => t.type === "buy"), steps = [
+    [P.chosen, `<b>Pick your plan</b> below — what to buy and how much a week.`],
+    [b.deps > 0, `<b>Deposit</b> in Gotrade (Funding → Deposit), at least ${money(P.set.minDep)}. Then tap <b>Deposit</b> on the map below and copy what Gotrade showed.`],
+    [bought, `<b>Buy</b> in Gotrade: search the ticker, enter a dollar amount from "What to buy". Then log it with <b>Buy</b>.`],
+    [false, `<b>Repeat</b> every ${plural(k, "week")}. Log dividends when they arrive. Don't sell in dips.`],
+  ];
+  const first = steps.findIndex(x => !x[0]);
+  const check = bought ? "" : `<ol class="check">${steps.map(([done, t], i) => `<li class="${done ? "done" : i === first ? "now" : ""}"><span class="box">${done ? "✓" : i + 1}</span><span>${t}</span></li>`).join("")}</ol>`;
+  $("#coach").innerHTML = check + tips.filter(t => bought || t[0] !== "dim").map(([c,l,t]) => `<div class="tip ${c === "ok" ? "" : c}"><span class="lbl">${l}</span>${t}</div>`).join("");
 }
 
 function drawNow(L){
@@ -386,44 +412,198 @@ function drawMkt(b){
     }).join("") + `</tbody></table>`;
 }
 
+// ---------- plan builder ----------
+// Common starting points, described by what they hold and how much they swing. The page applies
+// whichever you pick; it doesn't pick for you.
+const PRESETS = [
+  {id:"sp500", name:"Just the S&P 500", plan:[{sym:"VOO", pct:100}], swing:2,
+   text:"The 500 biggest US companies (Apple, Microsoft, Nvidia, Amazon…) in one fund. One thing to buy, nothing to balance — the usual first pick."},
+  {id:"total", name:"Whole US market", plan:[{sym:"VTI", pct:100}], swing:2,
+   text:"About 3,500 US companies, big and small. Moves almost exactly like the S&P 500, so choose this or that, not both."},
+  {id:"tech", name:"S&P 500 + extra tech", plan:[{sym:"VOO", pct:80}, {sym:"QQQM", pct:20}], swing:3,
+   text:"Adds weight in the 100 biggest Nasdaq companies, mostly tech. Has grown faster in recent years and falls harder in crashes."},
+];
+const sameMix = (a, b) => a.length === b.length && a.every(x => b.some(y => y.sym === x.sym && y.pct === x.pct));
+const mixText = plan => plan.map(t => `${t.sym} ${t.pct}%`).join(" + ");
+const meter = n => `<span class="meter" aria-label="${["","low","medium","high"][n]} swings">${[1,2,3].map(i => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>`;
+const RETURNS = [[5, "Cautious"], [8, "Middle"], [10, "Long-run S&P avg"]];
+
+function drawPlan(){
+  const cur = PRESETS.find(p => sameMix(p.plan, P.targets));
+  $("#presets").innerHTML = PRESETS.map(p => `<label class="preset"><input type="radio" name="preset" value="${p.id}" ${cur === p ? "checked" : ""}>
+      <div class="t">${p.name}</div><div class="mix">${mixText(p.plan)}</div><p>${p.text}</p>
+      <div class="sw2">Ups and downs ${meter(p.swing)}</div></label>`).join("")
+    + `<label class="preset"><input type="radio" name="preset" value="custom" ${cur ? "" : "checked"}>
+      <div class="t">Your own mix</div><div class="mix">${cur ? "e.g. VOO 90 + NVDA 10" : esc(mixText(P.targets)) || "nothing yet"}</div>
+      <p>Add a single company you believe in as a small slice. One company can drop 50% and stay down, so keep it small.</p>
+      <div class="sw2">Ups and downs ${meter(3)} · <a href="#" data-edit-plan>${cur ? "Set it up" : "Edit"}</a></div></label>`;
+
+  const s = P.set, el = $("#controls");
+  if(!el.firstChild){
+    el.innerHTML = `<div class="ctl"><div class="top"><span>Put aside each week</span><b id="cWeeklyV"></b></div>
+        <input type="range" id="cWeekly" min="200" max="5000" step="50" aria-label="Pesos per week"><div class="sub" id="cWeeklyS"></div></div>
+      <div class="ctl"><div class="top"><span>Deposit to Gotrade every</span><span class="sub">₱${s.fee} fee each time</span></div>
+        <div class="seg" id="cEvery">${[1,2,4,8].map(k => `<label><input type="radio" name="cEvery" value="${k}"><span>${k === 1 ? "week" : k + " weeks"}<small></small></span></label>`).join("")}</div>
+        <div class="sub" id="cEveryS" style="margin-top:6px"></div></div>
+      <div class="ctl"><div class="top"><span>Assume it grows</span><span class="sub">a guess, not a promise</span></div>
+        <div class="seg" id="cRet">${RETURNS.map(([v,l]) => `<label><input type="radio" name="cRet" value="${v}"><span>${v}% a year<small>${l}</small></span></label>`).join("")}</div></div>
+      <div class="ctl"><div class="top"><span>Look ahead</span><b id="cYearsV"></b></div>
+        <input type="range" id="cYears" min="1" max="40" step="1" aria-label="Years to project"></div>
+      <p class="sub">Fees, exchange rate and the rest are in <a href="#" data-open-set>Plan &amp; settings</a>.</p>`;
+  }
+  $("#cWeekly").value = s.weekly; $("#cYears").value = s.years;
+  $("#cWeeklyV").textContent = money(s.weekly).replace(".00", "");
+  $("#cWeeklyS").textContent = `≈ ${php0(s.weekly * 52 / 12)} a month · ${php0(s.weekly * 52)} a year`;
+  $("#cYearsV").textContent = plural(s.years, "year");
+  const cad = cadence();
+  el.querySelectorAll('[name="cEvery"]').forEach(r => {
+    const c = cad.find(x => x.k === +r.value);
+    r.checked = +r.value === s.every;
+    r.nextElementSibling.querySelector("small").textContent = c.ok ? `${c.feePct.toFixed(1)}% fee` : "below min";
+  });
+  const mine = cad.find(x => x.k === s.every), best = cad.find(x => x.k === bestK());
+  $("#cEveryS").innerHTML = `${php0(s.weekly * s.every)} per deposit · ${php0(mine?.fees || 0)} a year in fees`
+    + (best && mine && best.k !== mine.k && mine.cost - best.cost >= 100 ? ` · <span class="warn">every ${plural(best.k, "week")} saves ${php0(mine.cost - best.cost)}/yr</span>` : "");
+  el.querySelectorAll('[name="cRet"]').forEach(r => r.checked = +r.value === s.ret);
+}
+let planTimer = null;
+// Sliders redraw live but save once you stop dragging, so sync isn't hit on every pixel.
+function setPlan(patch, now){
+  Object.assign(P.set, patch); P = norm(P);
+  drawPlan(); draw();
+  clearTimeout(planTimer); planTimer = setTimeout(persist, now ? 0 : 500);
+}
+$("#controls").addEventListener("input", e => {
+  if(e.target.id === "cWeekly") setPlan({weekly:+e.target.value});
+  if(e.target.id === "cYears") setPlan({years:+e.target.value});
+  if(e.target.name === "cEvery") setPlan({every:+e.target.value}, true);
+  if(e.target.name === "cRet") setPlan({ret:+e.target.value}, true);
+});
+$("#presets").addEventListener("change", e => {
+  const p = PRESETS.find(x => x.id === e.target.value);
+  if(!p){ openSettings(); return; }
+  P.targets = p.plan.map(t => ({...t})); P.chosen = true; persist(); refresh();
+});
+document.addEventListener("click", e => {
+  if(e.target.closest("[data-edit-plan], [data-open-set]")){ e.preventDefault(); openSettings(); }
+});
+
+// ---------- projection ----------
 function drawProj(startVal, startIn){
-  const pts = project(startVal, startIn), last = pts.at(-1), {years, ret, weekly, every} = P.set;
-  $("#projSub").textContent = `${php0(weekly)}/week, deposited every ${plural(every, "week")}, at ${ret}%/yr`;
-  const W = 600, H = 250, l = 52, r = 14, t = 14, bt = 26;
-  const ymax = Math.max(...pts.map(p => p.val), 1) * 1.05;
-  const X = y => l + y / years * (W - l - r), Y = v => t + (1 - v / ymax) * (H - t - bt);
+  const pts = project(startVal, startIn), last = pts.at(-1), {years, ret} = P.set, r = ret / 100;
+  const at = y => pts.find(p => p.y >= y) || last;
+  const perMonth = p => p.inv * (Math.pow(1 + r, 1/12) - 1);   // what the money earns by itself in a month
+
+  const tileYears = [...new Set([5, 10, years].filter(y => y <= years))].slice(-3);
+  $("#tiles").innerHTML = tileYears.map(y => { const p = at(y), g = Math.max(0, p.val - p.put);
+    return `<div class="tile"><div class="eyebrow">In ${plural(y, "year")} · ${monthYear(p.date)}</div><div class="v num">${php0(p.val)}</div>
+      <div class="bar2"><i style="flex:${p.put || 1}"></i><i style="flex:${g}"></i></div>
+      <div class="sub">${php0(p.put)} put in + <b class="num">${php0(g)}</b> growth</div></div>`; }).join("");
+
+  const W = 640, H = 270, l = 56, rr = 12, t = 12, bt = 26;
+  const ymax = Math.max(...pts.map(p => Math.max(p.val, p.put)), 1) * 1.06;
+  const X = y => l + y / years * (W - l - rr), Y = v => t + (1 - v / ymax) * (H - t - bt);
   const ticks = [0, .25, .5, .75, 1].map(f => ymax * f);
-  const step = years <= 10 ? 1 : years <= 25 ? 5 : 10;
-  const line = k => pts.map((p,i) => `${i ? "L" : "M"}${X(p.y).toFixed(1)},${Y(p[k]).toFixed(1)}`).join("");
-  const gap = line("val") + pts.slice().reverse().map(p => `L${X(p.y).toFixed(1)},${Y(p.put).toFixed(1)}`).join("") + "Z";
-  $("#proj").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Projected value over ${years} years">
-    <g class="grid">${ticks.map(v => `<line x1="${l}" x2="${W-r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${l-8}" y="${Y(v)+4}" text-anchor="end">${phpK(v)}</text>`).join("")}</g>
-    ${pts.filter(p => p.y % step === 0).map(p => `<text x="${X(p.y)}" y="${H-8}" text-anchor="middle">${p.y ? "Yr " + p.y : "Now"}</text>`).join("")}
-    <path class="gap" d="${gap}"/><path class="l1" d="${line("put")}"/><path class="l2" d="${line("val")}"/>
-    <line class="xh" y1="${t}" y2="${H-bt}" visibility="hidden"/><circle class="dot1" r="4" visibility="hidden"/><circle class="dot2" r="4" visibility="hidden"/>
-    <rect x="${l}" y="0" width="${W-l-r}" height="${H}" fill="transparent" class="hit"/></svg><div class="tt"></div>`;
-  const svg = $("#proj svg"), tt = $("#proj .tt"), xh = svg.querySelector(".xh"), d1 = svg.querySelector(".dot1"), d2 = svg.querySelector(".dot2");
+  const step = years <= 5 ? 1 : years <= 15 ? 2 : years <= 25 ? 5 : 10;
+  const path = k => pts.map((p,i) => `${i ? "L" : "M"}${X(p.y).toFixed(1)},${Y(k(p)).toFixed(1)}`).join("");
+  const top = p => Math.max(p.val, p.put);
+  const area = (hi, lo) => path(hi) + pts.slice().reverse().map(p => `L${X(p.y).toFixed(1)},${Y(lo(p)).toFixed(1)}`).join("") + "Z";
+  const gEnd = last.val - last.put, lab = (txt, y) => `<text class="lbl" x="${W - rr - 8}" y="${y}" text-anchor="end">${txt}</text>`;
+  $("#proj").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Projected value over ${years} years: ${php0(last.val)}, of which ${php0(last.put)} put in">
+    <g class="grid">${ticks.map(v => `<line x1="${l}" x2="${W-rr}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${l-8}" y="${Y(v)+4}" text-anchor="end">${phpK(v)}</text>`).join("")}</g>
+    ${pts.filter(p => Number.isInteger(p.y) && p.y % step === 0).map(p => `<text x="${X(p.y)}" y="${H-8}" text-anchor="middle">${p.y ? new Date(p.date + "T00:00:00").getFullYear() : "Now"}</text>`).join("")}
+    <path class="a1" d="${area(p => p.put, () => 0)}"/><path class="a2" d="${area(top, p => p.put)}"/>
+    <path class="sep" d="${path(p => p.put)}"/>
+    ${Y(last.put) - Y(0) < -22 ? lab("Put in " + phpK(last.put), (Y(last.put) + Y(0)) / 2 + 4) : ""}
+    ${Y(last.val) - Y(last.put) < -22 ? lab("Growth " + phpK(gEnd), (Y(last.val) + Y(last.put)) / 2 + 4) : ""}
+    <line class="xh" y1="${t}" y2="${H-bt}" visibility="hidden"/><circle class="dot2" r="4.5" visibility="hidden"/>
+    <rect x="${l}" y="0" width="${W-l-rr}" height="${H}" fill="transparent"/></svg><div class="tt"></div>`;
+  const svg = $("#proj svg"), tt = $("#proj .tt"), xh = svg.querySelector(".xh"), d2 = svg.querySelector(".dot2");
   const show = e => {
     const box = svg.getBoundingClientRect(), sx = (e.clientX - box.left) / box.width * W;
-    const p = pts[Math.max(0, Math.min(pts.length - 1, Math.round((sx - l) / (W - l - r) * years)))];
-    for(const el of [xh, d1, d2]) el.setAttribute("visibility", "visible");
-    xh.setAttribute("x1", X(p.y)); xh.setAttribute("x2", X(p.y));
-    d1.setAttribute("cx", X(p.y)); d1.setAttribute("cy", Y(p.put)); d2.setAttribute("cx", X(p.y)); d2.setAttribute("cy", Y(p.val));
-    tt.innerHTML = `<b>${p.y ? "Year " + p.y : "Now"}</b><br><span class="sw" style="background:var(--s2)"></span>Value ${php0(p.val)}<br><span class="sw" style="background:var(--s1)"></span>Put in ${php0(p.put)}<br><span class="dim">Growth ${php0(p.val - p.put)}</span>`;
-    tt.style.left = Math.max(70, Math.min(box.width - 70, X(p.y) / W * box.width)) + "px";
-    tt.style.top = (Y(p.val) / H * box.height - 8) + "px"; tt.style.opacity = 1;
+    const p = pts[Math.max(0, Math.min(pts.length - 1, Math.round((sx - l) / (W - l - rr) * (pts.length - 1))))];
+    xh.setAttribute("visibility", "visible"); d2.setAttribute("visibility", "visible");
+    xh.setAttribute("x1", X(p.y)); xh.setAttribute("x2", X(p.y)); d2.setAttribute("cx", X(p.y)); d2.setAttribute("cy", Y(top(p)));
+    tt.innerHTML = `<b>${p.w ? monthYear(p.date) : "Now"}</b> <span class="dim">${p.w ? "· year " + p.y.toFixed(1) : ""}</span><br>
+      Worth <b>${php0(p.val)}</b><br><span class="sw" style="background:var(--s1)"></span>Put in ${php0(p.put)}<br>
+      <span class="sw" style="background:var(--s2)"></span>Growth ${php0(p.val - p.put)}<br><span class="dim">Earning ~${php0(perMonth(p))}/month by itself</span>`;
+    tt.style.left = Math.max(90, Math.min(box.width - 90, X(p.y) / W * box.width)) + "px";
+    tt.style.top = (Y(top(p)) / H * box.height - 10) + "px"; tt.style.opacity = 1;
   };
   svg.addEventListener("pointermove", show); svg.addEventListener("pointerdown", show);
-  svg.addEventListener("pointerleave", () => { tt.style.opacity = 0; for(const el of [xh, d1, d2]) el.setAttribute("visibility", "hidden"); });
+  svg.addEventListener("pointerleave", () => { tt.style.opacity = 0; xh.setAttribute("visibility", "hidden"); d2.setAttribute("visibility", "hidden"); });
 
-  const hit = v => pts.find(p => p.val >= v);
-  const cross = pts.find(p => p.y > 0 && p.val - p.put >= p.put);
-  const ms = [1e5, 5e5, 1e6, 5e6].map(v => [v, hit(v)]).filter(([v,p]) => p && p.y > 0 && v > startVal).slice(0, 3);
-  $("#miles").innerHTML = `In ${years} years: <b>${php0(last.val)}</b>, of which <b>${php0(last.put)}</b> is what you put in and <b>${php0(last.val - last.put)}</b> is growth. `
-    + (ms.length ? ms.map(([v,p]) => `${phpK(v)} around year ${p.y}`).join(" · ") + ". " : "")
-    + (cross ? `From year ${cross.y}, growth is bigger than everything you put in — that's compounding doing more work than you are. ` : "")
-    + `<span class="dim">An assumption, not a promise: real years swing from −40% to +30%. In today's pesos, not adjusted for inflation.</span>`;
+  const cross = pts.find(p => p.w && p.val - p.put >= p.put);
+  $("#miles").innerHTML = `By ${monthYear(last.date)} the money would be earning about <b>${php0(perMonth(last))} a month on its own</b>`
+    + ` — ${perMonth(last) >= P.set.weekly * 52 / 12 ? "more than you'd be putting in" : `vs the ${php0(P.set.weekly * 52 / 12)} a month you put in`}. `
+    + (cross ? `From ${monthYear(cross.date)} (year ${Math.ceil(cross.y)}), growth is bigger than everything you've put in: that's compounding. ` : "")
+    + `<span class="dim">Real years swing from −40% to +30%; this is the smooth average. In today's pesos, before inflation.</span>`;
+
+  const rows = [1,2,3,5,7,10,15,20,25,30,35,40].filter(y => y <= years);
+  $("#ytab").innerHTML = `<table><thead><tr><th>Year</th><th>Put in so far</th><th>Growth so far</th><th>Worth</th><th>Earns by itself / month</th></tr></thead><tbody>`
+    + rows.map(y => { const p = at(y); return `<tr><td>${y} · ${new Date(p.date + "T00:00:00").getFullYear()}</td><td>${php0(p.put)}</td>
+      <td>${php0(p.val - p.put)}</td><td><b>${php0(p.val)}</b></td><td>${php0(perMonth(p))}</td></tr>`; }).join("") + `</tbody></table>`;
 }
+
+// ---------- wishlist goals ----------
+// Weeks until a goal is affordable two ways, both starting from what you have now: investing on
+// the plan and withdrawing, or putting the same pesos a week in the bank.
+function goalWeeks(need, startVal, sim = simulate(52 * 40, startVal, 0)){
+  const start = takeHome({inv:startVal, held:0}), W = P.set.weekly;
+  const cash = need <= start ? 0 : W > 0 ? Math.ceil((need - start) / W) : null;
+  const i = sim.findIndex(p => takeHome(p) >= need);
+  return {cash, inv: i < 0 ? null : i};
+}
+let tryGoal = 0;
+function drawGoals(startVal){
+  const wishes = (S.wish || []).map(w => ({name:w.name, need:r2(w.cost * (1 - (w.helpPct || 0) / 100)), help:w.helpPct || 0}));
+  if(tryGoal > 0) wishes.push({name:"Your what-if", need:tryGoal, help:0, what:true});
+  const sim = simulate(52 * 40, startVal, 0);
+  const rows = wishes.filter(w => w.need > 0).map(w => ({...w, ...goalWeeks(w.need, startVal, sim)})).sort((a,b) => a.need - b.need);
+  const span = Math.max(26, ...rows.flatMap(r => [r.inv, r.cash]).filter(x => x != null && x <= 52 * 10)) * 1.08;
+  const pos = wk => Math.min(100, wk / span * 100);
+  const when = wk => wk == null ? "not within 40 years" : wk === 0 ? "now" : `${monthYear(addDays(today(), wk * 7))} <span class="dim">(${wk < 9 ? plural(wk, "week") : wk < 104 ? Math.round(wk / 4.345) + " months" : (wk / 52).toFixed(1) + " years"})</span>`;
+  const verdict = r => r.cash === 0 && r.inv === 0 ? `<b class="ok">You could already afford this</b> with what's on Gotrade — though spending it stops it growing.`
+    : r.inv == null ? `<span class="warn">Out of reach at ${php0(P.set.weekly)}/week</span>`
+    : r.cash != null && r.inv > r.cash ? `<b>Save this in the bank.</b> Investing takes ${plural(r.inv - r.cash, "week")} longer — the deposit fee and exchange rate eat the early growth.`
+    : r.cash != null && r.inv === r.cash ? `<b>Same time either way</b>, so keep it in the bank: no fees, and no dip can delay it.`
+    : r.inv < 156 ? `<b>Investing is ${plural(r.cash - r.inv, "week")} faster</b>, but under 3 years a market drop could easily delay it.`
+    : `<b>Investing gets there ${r.cash - r.inv >= 104 ? ((r.cash - r.inv) / 52).toFixed(1) + " years" : plural(r.cash - r.inv, "week")} sooner.</b>`;
+  const ticks = [0, ...[13, 26, 52, 104, 156, 260, 520].filter(w => w < span * 0.92).slice(-4)];
+  const tickLbl = w => w === 0 ? "Now" : w < 52 ? Math.round(w / 4.345) + " mo" : (w / 52) + " yr";
+
+  $("#goals").innerHTML = (rows.length ? `<div class="glegend"><span><span class="pin inv"></span>Investing ${php0(P.set.weekly)}/week on your plan</span>
+      <span><span class="pin cash"></span>Saving ${php0(P.set.weekly)}/week in the bank</span></div>`
+    + rows.map(r => `<div class="goal"><div class="gname"><b title="${esc(r.name)}">${esc(r.name)}</b>
+        <span class="sub">${money(r.need)}${r.help ? ` (your ${100 - r.help}%)` : ""}</span></div>
+        <div class="track" title="Investing: ${r.inv ?? "never"} weeks · Bank: ${r.cash ?? "never"} weeks">
+          ${r.inv != null ? `<i class="bar inv" style="width:${pos(r.inv)}%"></i><span class="pin inv" style="left:${pos(r.inv)}%"></span>` : ""}
+          ${r.cash != null ? `<i class="bar cash" style="width:${pos(r.cash)}%"></i><span class="pin cash" style="left:${pos(r.cash)}%"></span>` : ""}</div>
+        <div class="gwhen">Investing: ${when(r.inv)}<br>Bank: ${when(r.cash)}<br>${verdict(r)}</div></div>`).join("")
+    + `<div class="axisrow"><span></span><div class="axis">${ticks.map(w => `<span style="left:${pos(w)}%">${tickLbl(w)}</span>`).join("")}</div><span></span></div>`
+    : `<p class="dim">No wishlist items found. Add them in <a href="../">Ledger</a>'s Wishlist (or turn on sync there), or try an amount below.</p>`)
+    + `<div class="try"><label>What if I want something that costs (₱)<input id="tryAmt" type="number" min="0" step="500" inputmode="decimal" placeholder="e.g. 50000" value="${tryGoal || ""}"></label>
+      <p class="sub" style="flex:2 1 260px">Each item is timed on its own, as if it were your only goal. Taking money out to buy something also stops it compounding — the projection above assumes you never withdraw.</p></div>`;
+}
+$("#goals").addEventListener("change", e => {
+  if(e.target.id !== "tryAmt") return;
+  tryGoal = Math.max(0, +e.target.value || 0); const b = book(); drawGoals(worth(b).total * mid());
+});
+
+// ---------- money map ----------
+function drawFlow(b, w, L){
+  const arrow = (type, dir, label, cost) => `<button class="arrow" data-log="${type}"><span class="gl ${dir === "→" ? "r" : "l"}">${dir}</span><span><b>${label}</b><small>${cost}</small></span></button>`;
+  $("#flow").innerHTML = `
+    <div class="node"><div class="eyebrow">Bank (Ledger)</div><div class="v num">${L.has ? money(Math.max(0, L.free)) : "—"}</div>
+      <div class="sub">${L.has ? "free to invest after bills and buffer" : "open Ledger on this device to see it"}</div></div>
+    <div class="link">${arrow("deposit", "→", "Deposit", `₱${P.set.fee} + ~${P.set.spread}% rate`)}${arrow("withdraw", "←", "Withdraw", `$${P.set.wdFee} + ~${P.set.spread}% rate`)}</div>
+    <div class="node ${b.cash >= 1 ? "here" : ""}"><div class="eyebrow">Gotrade cash</div><div class="v num">${usd(b.cash)}</div>
+      <div class="sub">${b.cash >= 1 ? "not growing yet — buy with it" : "dollars waiting to be invested"}</div></div>
+    <div class="link">${arrow("buy", "→", "Buy", "no fee, fractions OK")}${arrow("div", "←", "Dividend", "funds pay you cash")}${arrow("sell", "←", "Sell", "only to take money out")}</div>
+    <div class="node"><div class="eyebrow">Your funds</div><div class="v num">${usd(w.val)}</div>
+      <div class="sub">${Object.keys(b.pos).length ? Object.keys(b.pos).join(", ") + " — this is the part that grows" : "the part that grows"}</div></div>`;
+}
+$("#flow").addEventListener("click", e => { const t = e.target.closest("[data-log]")?.dataset.log; if(t) openTx(t); });
 
 // ---------- logging ----------
 const TX_FIELDS = {deposit:["php","usd"], withdraw:["usd","php"], buy:["sym","usd","shares"], sell:["sym","shares","usd"], div:["sym","usd"]};
@@ -434,9 +614,18 @@ const TX_TEXT = {
   sell:["Log a sale", "", "Received ($)", "Selling locks in the FX cost and any loss. The plan never needs it."],
   div:["Log a dividend", "", "Dividend received after tax ($)", ""],
 };
+// What each step actually is, shown at the top of its dialog.
+const TX_WHAT = {
+  deposit:"Pesos from your bank into Gotrade. Gotrade keeps ₱45 and converts the rest to dollars, which sit as Gotrade cash until you buy.",
+  buy:"Gotrade cash into shares of a fund. This is the step that invests: cash doesn't grow, shares do.",
+  div:"A fund paid you part of its companies' profits. It arrives as Gotrade cash (US tax already taken out). Buy more with it.",
+  sell:"Shares back into Gotrade cash. You only need this to take money out — and selling in a dip makes the loss real.",
+  withdraw:"Dollars from Gotrade back to your bank as pesos. Costs $5 plus Gotrade's exchange rate.",
+};
 function openTx(type){
   const f = $("#txForm"), [title, phpL, usdL, hint] = TX_TEXT[type];
   f.reset(); f.dataset.type = type;
+  $("#txWhat").textContent = TX_WHAT[type];
   $("#txTitle").textContent = title; $("#phpLbl").textContent = phpL; $("#usdLbl").textContent = usdL; $("#txHint").textContent = hint;
   for(const el of f.querySelectorAll("[data-f]")) el.hidden = !TX_FIELDS[type].includes(el.dataset.f);
   f.date.value = today();
@@ -485,13 +674,16 @@ function parsePlan(s){
   }
   return out;
 }
-$("#setBtn").addEventListener("click", () => {
+$("#setBtn").addEventListener("click", () => openSettings());
+function openSettings(){
   const f = $("#setForm");
   for(const k in SET0) if(f[k]) f[k].type === "checkbox" ? (f[k].checked = P.set[k]) : (f[k].value = P.set[k]);
   f.plan.value = P.targets.map(t => `${t.sym} ${t.pct}`).join(", ");
   f.watch.value = P.watch.join(", ");
   $("#setDlg").returnValue = ""; $("#setDlg").showModal();
-});
+}
+// Cancelling the custom-mix dialog must not leave "Your own mix" ticked over the real plan.
+$("#setDlg").addEventListener("close", () => drawPlan());
 $("#setDlg").addEventListener("close", () => {
   if($("#setDlg").returnValue !== "ok") return;
   const f = $("#setForm"), plan = parsePlan(f.plan.value);
@@ -500,7 +692,7 @@ $("#setDlg").addEventListener("close", () => {
   if(!watch.every(s => SYM.test(s))) return alert("One of the watched tickers doesn't look right.");
   const set = {};
   for(const k in SET0) set[k] = f[k].type === "checkbox" ? f[k].checked : +f[k].value;
-  P = norm({...P, set, targets:plan, watch});
+  P = norm({...P, set, targets:plan, watch, chosen:true});
   const total = plan.reduce((s,t) => s + t.pct, 0);
   if(plan.length && Math.abs(total - 100) > 0.01) alert(`Your plan adds up to ${total}%. It's used as relative weights, so it still works.`);
   persist(); refresh();
@@ -542,7 +734,9 @@ function selfTest(){
   ok(c[0].fees === 2340 && c[0].drag === 0, "weekly: 52 fees, no waiting cost");
   ok(Math.abs(c[2].feePct - 1.125) < 1e-9, "every 4 weeks: ₱45 on ₱4,000 is 1.125%");
   const pts = project(0, 0);
-  ok(Math.abs(pts.at(-1).val - (52000 - 13 * 45)) < 0.01, "0% return: value = contributions - fees");
+  ok(Math.abs(pts.at(-1).val - (52000 - 13 * 45)) < 0.01 && pts.at(-1).y === 1, "0% return: value = contributions - fees");
+  ok(takeHome({inv:0, held:500}) === 500, "take-home: cash still in the bank costs nothing to withdraw");
+  ok(goalWeeks(4000, 0).cash === 4, "saving ₱1,000/week reaches ₱4,000 in 4 weeks");
   const plan = buyPlan(100, {pos:{AAA:{shares:1, cost:50}}});
   ok(plan.reduce((s,r) => s + r.amt, 0) <= 100, "buy plan never spends more than the cash");
   ok(plan.find(r => r.sym === "BBB").amt > plan.find(r => r.sym === "AAA").amt, "buy plan fills the underweight fund first");

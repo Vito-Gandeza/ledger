@@ -64,15 +64,16 @@ b,strong{font-weight:600}
 .dash > *, .col > *{min-width:0}
 .col{display:contents}
 @media (max-width:1079px){
-  .a-hero{order:0} .a-now{order:1} .a-buy{order:2} .a-dep{order:3} .a-hold{order:4}
-  .a-proj{order:5} .a-mkt{order:6} .a-act{order:7} .a-learn{order:8} .a-foot{order:9}
+  .a-hero{order:0} .a-plan{order:1} .a-goals{order:2} .a-buy{order:3} .a-now{order:4} .a-dep{order:5}
+  .a-hold{order:6} .a-act{order:7} .a-mkt{order:8} .a-learn{order:9} .a-foot{order:10}
 }
 @media (min-width:1080px){
   :root{--maxw:1200px}
   .dash{display:grid; gap:28px 26px; align-items:start; grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-  .a-hero, .a-foot{grid-column:1 / -1}
+  .a-hero, .a-plan, .a-goals, .a-learn, .a-foot{grid-column:1 / -1}
   .col{display:flex; flex-direction:column; gap:28px}
 }
+@media (min-width:1500px){ :root{--maxw:1440px} }
 
 .hero{background:var(--card); border:1px solid var(--line); border-radius:var(--r);
   box-shadow:var(--lift-hi); padding:24px; position:relative; overflow:hidden}
@@ -80,7 +81,7 @@ b,strong{font-weight:600}
   background:radial-gradient(120% 100% at 0% 0%, color-mix(in srgb,var(--accent) 12%,transparent), transparent 70%)}
 .hero > *{position:relative}
 .big{font-size:clamp(38px,10.5vw,52px); font-weight:600; line-height:1.05; letter-spacing:-.035em; margin:4px 0 6px}
-.split{display:grid; gap:16px 20px; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); padding-top:18px}
+.split{display:grid; gap:16px 20px; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); padding-top:18px}
 .split .v{font-size:20px; font-weight:600; letter-spacing:-.02em; margin-top:2px}
 .tip{margin-top:12px; padding:13px 16px; border-radius:var(--r-md); font-size:15px; line-height:1.42;
   border:1px solid color-mix(in srgb, var(--accent) 30%, transparent);
@@ -165,6 +166,107 @@ details.learn > summary{padding:13px 18px; cursor:pointer; font-weight:600; font
 details.learn > div{padding:0 18px 16px; font-size:15px; color:var(--fg2); line-height:1.5}
 details.learn p + p{margin-top:8px}
 .foot{font-size:13px; color:var(--dim); line-height:1.5; display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+
+/* ---------- hero: number + next step side by side, money map underneath ---------- */
+.herogrid{display:grid; gap:20px 32px; grid-template-columns:minmax(0,1fr)}
+@media (min-width:900px){ .herogrid{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)} }
+.check{list-style:none; margin-top:10px}
+.check li{display:flex; gap:10px; align-items:flex-start; padding:7px 0; font-size:15px; line-height:1.4}
+.check .box{flex:none; width:22px; height:22px; border-radius:50%; border:1.5px solid var(--line);
+  display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; margin-top:1px}
+.check li.done{color:var(--dim)} .check li.done .box{background:var(--accent); border-color:var(--accent); color:var(--on-accent)}
+.check li.now .box{border-color:var(--accent); color:var(--accent)}
+.flowhead{display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; margin:22px 0 10px; padding-top:18px; border-top:1px solid var(--line-soft)}
+.flow{display:grid; gap:8px; grid-template-columns:minmax(0,1fr)}
+@media (min-width:700px){ .flow{grid-template-columns:minmax(0,1fr) minmax(110px,.55fr) minmax(0,1fr) minmax(110px,.55fr) minmax(0,1fr); align-items:stretch} }
+.node{background:var(--sunk); border:1px solid var(--line-soft); border-radius:var(--r-md); padding:12px 14px; min-width:0}
+.node .v{font-size:20px; font-weight:600; letter-spacing:-.02em; margin:2px 0}
+.node.here{border-color:color-mix(in srgb, var(--accent) 45%, transparent)}
+.link{display:flex; flex-direction:column; justify-content:center; gap:6px}
+.arrow{display:flex; align-items:center; gap:6px; border:1px dashed var(--line); background:none; color:var(--fg);
+  border-radius:var(--pill); padding:5px 10px; font:inherit; font-size:13px; cursor:pointer; text-align:left; line-height:1.25}
+.arrow b{color:var(--accent)} .arrow small{color:var(--dim); display:block; font-size:11.5px}
+@media (hover:hover){ .arrow:hover{border-style:solid; border-color:var(--accent)} }
+.arrow .gl{font-size:15px; color:var(--accent)}
+@media (max-width:699px){ .link{flex-direction:row; flex-wrap:wrap; padding-left:14px} .arrow .gl.r{transform:rotate(90deg)} .arrow .gl.l{transform:rotate(90deg)} }
+
+/* ---------- plan builder ---------- */
+.plangrid{display:grid; grid-template-columns:minmax(0,1fr)}
+@media (min-width:1080px){ .plangrid{grid-template-columns:minmax(0,.85fr) minmax(0,1.3fr)} .plangrid .pp + .pp{border-left:1px solid var(--line-soft)} }
+.pp{padding:20px 22px; min-width:0}
+@media (max-width:1079px){ .pp + .pp{border-top:1px solid var(--line-soft)} }
+.step{display:flex; align-items:center; gap:10px; font-weight:600; font-size:17px; margin:4px 0 12px}
+.step:not(:first-child){margin-top:24px}
+.step .n{width:24px; height:24px; border-radius:50%; background:var(--accent); color:var(--on-accent); font-size:13px;
+  display:inline-flex; align-items:center; justify-content:center; flex:none}
+.presets{display:grid; gap:10px; grid-template-columns:repeat(auto-fill,minmax(185px,1fr))}
+.preset{position:relative; display:block; margin:0; border:1.5px solid var(--line); border-radius:var(--r-md);
+  padding:12px 14px; cursor:pointer; color:var(--fg); background:var(--card); transition:border-color .15s}
+.preset input{position:absolute; opacity:0; pointer-events:none}
+.preset:has(input:checked){border-color:var(--accent); background:color-mix(in srgb, var(--accent) 7%, var(--card))}
+.preset:has(input:focus-visible){outline:2px solid var(--accent-hi); outline-offset:2px}
+.preset .t{font-weight:600; font-size:15.5px}
+.preset .mix{font-size:13px; color:var(--accent); font-weight:600; margin:1px 0 5px}
+.preset p{font-size:13.5px; color:var(--fg2); line-height:1.4}
+.preset .sw2{font-size:12px; color:var(--dim); margin-top:6px}
+.meter{display:inline-flex; gap:3px; vertical-align:middle; margin-left:4px}
+.meter i{width:12px; height:5px; border-radius:2px; background:var(--line)}
+.meter i.on{background:var(--fg2)}
+.ctl{margin-bottom:18px}
+.ctl .top{display:flex; justify-content:space-between; gap:10px; align-items:baseline; flex-wrap:wrap; font-size:15px; margin-bottom:6px}
+.ctl .top b{font-size:18px}
+input[type=range]{width:100%; min-height:28px; padding:0; border:0; background:none; accent-color:var(--accent)}
+.seg{display:flex; background:var(--sunk); border-radius:var(--r-md); padding:3px; gap:3px}
+.seg label{flex:1 1 0; margin:0; position:relative; min-width:0}
+.seg input{position:absolute; opacity:0; inset:0; width:100%; height:100%; margin:0; cursor:pointer}
+.seg span{display:block; text-align:center; padding:7px 4px; border-radius:9px; font-size:13.5px; color:var(--fg2); line-height:1.25}
+.seg span small{display:block; font-size:11.5px; color:var(--dim)}
+.seg input:checked + span{background:var(--card); color:var(--fg); font-weight:600; box-shadow:var(--lift)}
+.seg input:focus-visible + span{outline:2px solid var(--accent-hi)}
+.tiles{display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); margin-bottom:16px}
+.tile{background:var(--sunk); border-radius:var(--r-md); padding:12px 14px}
+.tile .v{font-size:24px; font-weight:600; letter-spacing:-.03em; margin:2px 0}
+.tile .bar2{display:flex; height:6px; border-radius:3px; overflow:hidden; margin:8px 0 6px; gap:2px}
+.tile .bar2 i:first-child{background:var(--s1)} .tile .bar2 i:last-child{background:var(--s2)}
+.ytab{margin-top:14px}
+.ytab > summary{cursor:pointer; font-weight:600; font-size:15px; padding:6px 0}
+.chartbox .a1{fill:var(--s1)} .chartbox .a2{fill:var(--s2)}
+.chartbox .sep{fill:none; stroke:var(--card); stroke-width:2}
+.chartbox .lbl{font-size:12px; font-weight:600; fill:#fff}
+
+/* ---------- wishlist timeline ---------- */
+.goal{display:grid; gap:6px 16px; grid-template-columns:minmax(0,1fr); padding:14px 0; border-bottom:1px solid var(--line-soft)}
+.goal:last-of-type{border-bottom:0}
+@media (min-width:900px){ .goal{grid-template-columns:200px minmax(0,1fr) 260px; align-items:center} }
+.gname b{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+/* Two lanes, so a cash date and an investing date that land together never hide each other. */
+.track{position:relative; height:40px}
+.track::before, .track::after{content:""; position:absolute; left:0; right:0; height:2px; background:var(--line-soft); border-radius:1px}
+.track::before{top:11px} .track::after{top:29px}
+.track .bar{position:absolute; left:0; height:6px; border-radius:3px}
+.track .bar.inv{top:9px; background:color-mix(in srgb, var(--s2) 40%, transparent)}
+.track .bar.cash{top:27px; background:color-mix(in srgb, var(--s1) 35%, transparent)}
+.pin{position:absolute; width:16px; height:16px; margin-left:-8px; border-radius:50%; border:2px solid var(--card)}
+.pin.cash{background:var(--s1); top:22px} .pin.inv{background:var(--s2); border-radius:3px; transform:rotate(45deg); width:14px; height:14px; margin-left:-7px; top:5px}
+.progress{height:8px; background:var(--sunk); border-radius:4px; overflow:hidden; margin-top:10px}
+.progress i{display:block; height:100%; background:var(--accent); border-radius:4px}
+.gwhen{font-size:13.5px; line-height:1.45}
+.axis{position:relative; height:18px; font-size:11.5px; color:var(--dim); margin-top:4px}
+.axis span{position:absolute; transform:translateX(-50%); white-space:nowrap}
+.axis span:first-child{transform:none}
+@media (min-width:900px){ .axisrow{display:grid; grid-template-columns:200px minmax(0,1fr) 260px; gap:16px} }
+.glegend{display:flex; gap:18px; font-size:13px; color:var(--fg2); flex-wrap:wrap; margin-bottom:6px}
+.glegend .pin{position:static; display:inline-block; vertical-align:-3px; margin:0 6px 0 0}
+.glegend .pin.inv{margin-left:2px}
+.try{display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-top:16px; padding-top:16px; border-top:1px solid var(--line-soft)}
+.try label{margin:0; flex:1 1 160px}
+
+/* ---------- glossary ---------- */
+.gloss{display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.term{background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:14px 16px; box-shadow:var(--lift)}
+.term b{font-size:15.5px}
+.term p{font-size:14px; color:var(--fg2); line-height:1.45; margin-top:4px}
+.tx-what{font-size:14px; line-height:1.45; color:var(--fg2); background:var(--sunk); border-radius:var(--r-md); padding:10px 12px; margin:-6px 0 16px}
 </style>
 </head>
 <body>
@@ -182,36 +284,72 @@ details.learn p + p{margin-top:8px}
 <div class="dash">
 
   <header class="a-hero hero">
-    <div class="eyebrow">Gotrade portfolio</div>
-    <div class="big num" id="hVal">—</div>
-    <div class="sub" id="hSub"></div>
-    <div class="split" id="hSplit"></div>
-    <div id="coach" style="margin-top:8px"></div>
+    <div class="herogrid">
+      <div>
+        <div class="eyebrow">Your Gotrade money</div>
+        <div class="big num" id="hVal">—</div>
+        <div class="sub" id="hSub"></div>
+        <div class="split" id="hSplit"></div>
+      </div>
+      <div>
+        <div class="eyebrow">What to do next</div>
+        <div id="coach"></div>
+      </div>
+    </div>
+    <div class="flowhead"><span class="eyebrow">Where your money is</span><span class="sub">Tap an arrow to log that step.</span></div>
+    <div class="flow" id="flow"></div>
   </header>
 
-  <div class="col">
-    <section class="a-now">
-      <div class="shead"><h2>Your money right now</h2><span class="sub">from Ledger</span></div>
-      <div class="card" id="now"></div>
-    </section>
+  <section class="a-plan">
+    <div class="shead"><div><h2>Your plan</h2>
+      <div class="sub">Choose what to buy and how much to put in. The projection updates as you change anything.</div></div></div>
+    <div class="card plangrid">
+      <div class="pp">
+        <div class="step"><span class="n">1</span>What to buy</div>
+        <div class="presets" id="presets"></div>
+        <div class="step"><span class="n">2</span>How much, how often</div>
+        <div id="controls"></div>
+      </div>
+      <div class="pp">
+        <div class="step"><span class="n">3</span>What it could grow to</div>
+        <div class="tiles" id="tiles"></div>
+        <div class="legend"><span><i style="background:var(--s1)"></i>What you put in</span><span><i style="background:var(--s2)"></i>Growth (compounding)</span><span class="dim">Hover or tap the chart for any month</span></div>
+        <div class="chartbox" id="proj"></div>
+        <p id="miles" class="sub" style="margin-top:12px"></p>
+        <details class="ytab" open><summary>Year by year</summary><div class="scroll" id="ytab"></div></details>
+      </div>
+    </div>
+  </section>
 
+  <section class="a-goals">
+    <div class="shead"><div><h2>Your wishlist, if you invest for it</h2>
+      <div class="sub">From Ledger. When could your Gotrade money pay for each item — compared with saving the same ₱ a week in the bank?</div></div></div>
+    <div class="card pad" id="goals"></div>
+  </section>
+
+  <div class="col">
     <section class="a-buy">
-      <div class="shead"><h2>What to buy</h2></div>
+      <div class="shead"><div><h2>What to buy</h2><div class="sub">How to split your next buy so it follows your plan.</div></div></div>
       <div class="card pad" id="buy"></div>
     </section>
 
+    <section class="a-now">
+      <div class="shead"><div><h2>Can I afford to deposit?</h2><div class="sub">From Ledger: your cash, minus bills coming up, minus a safety buffer.</div></div></div>
+      <div class="card" id="now"></div>
+    </section>
+
     <section class="a-hold">
-      <div class="shead"><h2>Holdings</h2></div>
+      <div class="shead"><div><h2>What you own</h2><div class="sub">Your funds, what you paid, and what they're worth now.</div></div></div>
       <div class="card" id="hold"></div>
     </section>
 
     <section class="a-act">
-      <div class="shead"><h2>Activity</h2>
+      <div class="shead"><div><h2>Activity</h2><div class="sub">Log each step right after you do it in Gotrade. Everything else is worked out from this list.</div></div>
         <div class="acts">
           <button class="btn mini" data-log="deposit">+ Deposit</button>
           <button class="btn mini" data-log="buy">+ Buy</button>
+          <button class="btn mini" data-log="div">+ Dividend</button>
           <button class="btn mini" data-log="sell">Sell</button>
-          <button class="btn mini" data-log="div">Dividend</button>
           <button class="btn mini" data-log="withdraw">Withdraw</button>
         </div>
       </div>
@@ -220,51 +358,61 @@ details.learn p + p{margin-top:8px}
   </div>
 
   <div class="col">
-    <section class="a-proj">
-      <div class="shead"><h2>Compounding</h2><span class="sub" id="projSub"></span></div>
-      <div class="card pad">
-        <div class="legend"><span><i style="background:var(--s2)"></i>Value</span><span><i style="background:var(--s1)"></i>What you put in</span></div>
-        <div class="chartbox" id="proj"></div>
-        <div id="miles" class="sub" style="margin-top:10px"></div>
-      </div>
-    </section>
-
     <section class="a-dep">
-      <div class="shead"><h2>Deposits &amp; fees</h2></div>
+      <div class="shead"><div><h2>Deposits &amp; fees</h2><div class="sub">Gotrade charges ₱45 every deposit, so how often you deposit matters.</div></div></div>
       <div class="card pad" id="dep"></div>
     </section>
 
     <section class="a-mkt">
-      <div class="shead"><h2>Market watch</h2><span class="sub" id="mktSub"></span></div>
-      <div class="card scroll" id="mkt"></div>
-    </section>
-
-    <section class="a-learn">
-      <div class="shead"><h2>The basics</h2></div>
-      <div class="card" id="learn">
-        <details class="learn"><summary>Why index funds (VOO, VTI, SPY)</summary><div>
-          <p>An index fund buys every company in an index, so one share spreads your money across hundreds of businesses. You don't need to pick winners — you own the market and earn the market's return, minus a tiny fee.</p>
-          <p><b>VOO</b> and <b>SPY</b> both track the S&amp;P 500 (the 500 largest US companies). They move almost identically; VOO's yearly fee is 0.03% vs SPY's 0.09%, so for buy-and-hold VOO is the cheaper copy. <b>VTI</b> holds the whole US market (~3,500 companies) at 0.03%; it's about 85% the same as VOO. Owning both adds little. Pick one as your core.</p>
-          <p>The S&amp;P 500 has averaged roughly 10% a year since 1957 (about 7% after US inflation), but with drops of 20–50% along the way. The average only works if you stay in through the drops.</p>
-        </div></details>
-        <details class="learn"><summary>Buying regularly vs. buying the dip</summary><div>
-          <p>Putting in a fixed amount on a schedule (dollar-cost averaging) buys more shares when prices are low and fewer when high, automatically. It also removes the hardest part — deciding when.</p>
-          <p>Waiting for a dip usually loses: markets spend most of their time near highs, and cash sitting out while you wait misses the gains. The "dip tilt" in settings only shifts <i>where</i> each scheduled deposit goes (toward a fund that's down from its high); it never delays buying.</p>
-          <p>Single stocks can fall 50–90% and never recover — that happens to index funds far less. If you want some, cap them at a small slice (say 10%) and keep the core in an index fund.</p>
-        </div></details>
-        <details class="learn"><summary>What Gotrade actually costs you</summary><div>
-          <p><b>Deposit fee:</b> ₱45 flat. On ₱1,000 that's 4.5%; on ₱6,000 it's 0.75%. Since it's flat, fewer and bigger deposits cost less — see "Deposits &amp; fees" for the math on your numbers.</p>
-          <p><b>Exchange rate:</b> Gotrade's rate is worse than the mid-market rate, both ways (about 2% each way when this was built). That's a ~4% round trip, which is why you buy and hold instead of moving money in and out.</p>
-          <p><b>Withdrawal:</b> $5 per withdrawal, plus the spread.</p>
-        </div></details>
-        <details class="learn"><summary>Taxes and other things to know</summary><div>
-          <p>US funds hold back tax on dividends for non-US investors (commonly 30%, or 25% under the US–Philippines treaty if a W-8BEN is on file). VOO yields around 1.2% a year, so this costs a few tenths of a percent a year. Log dividends after tax.</p>
-          <p>US estate tax can apply to non-US investors holding over $60,000 of US assets. That's years away at this pace, but worth knowing about later.</p>
-          <p>Keep an emergency fund outside the market (the cash buffer in settings). Selling in a crash to pay a bill is the one way to really lose money in an index fund.</p>
-        </div></details>
-      </div>
+      <div class="shead"><div><h2>Market watch</h2><div class="sub" id="mktSub"></div></div></div>
+      <div class="card"><div class="scroll" id="mkt"></div>
+        <p class="sub pad" style="border-top:1px solid var(--line-soft)"><b>From 52-wk high</b>: how far below its highest price of the past year (−12% = 12% cheaper than its peak). <b>vs 200-day avg</b>: above 0 = trending up lately, below = trending down. Neither predicts tomorrow; they just tell you if today is a sale.</p></div>
     </section>
   </div>
+
+  <section class="a-learn">
+    <div class="shead"><div><h2>Words you'll see</h2><div class="sub">Plain-language meanings for every term on this page and in Gotrade.</div></div></div>
+    <div class="gloss">
+      <div class="term"><b>Deposit</b><p>Moving pesos from your bank into Gotrade. Gotrade keeps ₱45 and turns the rest into dollars at its own rate. The dollars sit as <i>cash</i> — not invested yet.</p></div>
+      <div class="term"><b>Buy</b><p>Using Gotrade cash to buy shares of a fund. <b>This is the step that invests.</b> Cash on Gotrade does not grow; shares do.</p></div>
+      <div class="term"><b>Share</b><p>One small piece of a fund or company. If the fund's price rises 10%, every share you own is worth 10% more.</p></div>
+      <div class="term"><b>Fractional share</b><p>Part of a share. VOO costs ~$700 a share, but Gotrade lets you buy $10 of it and own 0.014 of a share.</p></div>
+      <div class="term"><b>Dividend</b><p>A small cash payment a fund makes from its companies' profits, about every 3 months (VOO: ~1.2% a year). It lands as Gotrade cash with US tax already taken. Buy more with it.</p></div>
+      <div class="term"><b>Sell</b><p>Turning shares back into Gotrade cash. Only needed when you want money out — selling in a dip locks in the loss.</p></div>
+      <div class="term"><b>Withdraw</b><p>Moving dollars from Gotrade back to your bank as pesos. Costs $5 plus Gotrade's exchange rate.</p></div>
+      <div class="term"><b>Fund / ETF</b><p>A basket of many stocks you buy as one ticker. VOO, VTI, SPY and QQQM are ETFs (exchange-traded funds).</p></div>
+      <div class="term"><b>Index fund</b><p>A fund that simply holds every company in a list, like the S&amp;P 500. No one picks stocks, so fees are tiny and you get the market's return.</p></div>
+      <div class="term"><b>Ticker</b><p>A fund's short name on the stock market: VOO, VTI, AAPL. It's what you search for in Gotrade.</p></div>
+      <div class="term"><b>Compounding</b><p>Your growth earns growth. ₱10,000 up 8% becomes ₱10,800; next year the 8% is on ₱10,800. Slow at first, then it does more work than your deposits.</p></div>
+      <div class="term"><b>Dollar-cost averaging</b><p>Investing the same amount on a schedule no matter the price. You automatically buy more shares when prices are low.</p></div>
+      <div class="term"><b>Expense ratio</b><p>A fund's yearly fee, taken from inside the fund. VOO's 0.03% is ₱3 a year per ₱10,000.</p></div>
+      <div class="term"><b>Exchange spread</b><p>The gap between the real peso–dollar rate and the rate Gotrade gives you — about 2% each way. A hidden fee on deposits and withdrawals.</p></div>
+      <div class="term"><b>52-week high</b><p>The highest price in the past year. A fund well below it is "on sale" compared with recently.</p></div>
+      <div class="term"><b>Gain / loss</b><p>Value now minus what you paid. It only becomes real money when you sell — a dip you hold through isn't a loss you've taken.</p></div>
+    </div>
+    <div class="card" id="learn" style="margin-top:20px">
+      <details class="learn"><summary>Why index funds (VOO, VTI, SPY)</summary><div>
+        <p>An index fund buys every company in an index, so one share spreads your money across hundreds of businesses. You don't need to pick winners — you own the market and earn the market's return, minus a tiny fee.</p>
+        <p><b>VOO</b> and <b>SPY</b> both track the S&amp;P 500 (the 500 largest US companies). They move almost identically; VOO's yearly fee is 0.03% vs SPY's 0.09%, so for buy-and-hold VOO is the cheaper copy. <b>VTI</b> holds the whole US market (~3,500 companies) at 0.03%; it's about 85% the same as VOO. Owning both adds little. Pick one as your core.</p>
+        <p>The S&amp;P 500 has averaged roughly 10% a year since 1957 (about 7% after US inflation), but with drops of 20–50% along the way. The average only works if you stay in through the drops.</p>
+      </div></details>
+      <details class="learn"><summary>Buying regularly vs. buying the dip</summary><div>
+        <p>Putting in a fixed amount on a schedule (dollar-cost averaging) buys more shares when prices are low and fewer when high, automatically. It also removes the hardest part — deciding when.</p>
+        <p>Waiting for a dip usually loses: markets spend most of their time near highs, and cash sitting out while you wait misses the gains. The "dip tilt" in settings only shifts <i>where</i> each scheduled deposit goes (toward a fund that's down from its high); it never delays buying.</p>
+        <p>Single stocks can fall 50–90% and never recover — that happens to index funds far less. If you want some, cap them at a small slice (say 10%) and keep the core in an index fund.</p>
+      </div></details>
+      <details class="learn"><summary>What Gotrade actually costs you</summary><div>
+        <p><b>Deposit fee:</b> ₱45 flat. On ₱1,000 that's 4.5%; on ₱6,000 it's 0.75%. Since it's flat, fewer and bigger deposits cost less — see "Deposits &amp; fees" for the math on your numbers.</p>
+        <p><b>Exchange rate:</b> Gotrade's rate is worse than the mid-market rate, both ways (about 2% each way when this was built). That's a ~4% round trip, which is why you buy and hold instead of moving money in and out.</p>
+        <p><b>Withdrawal:</b> $5 per withdrawal, plus the spread.</p>
+      </div></details>
+      <details class="learn"><summary>Taxes and other things to know</summary><div>
+        <p>US funds hold back tax on dividends for non-US investors (commonly 30%, or 25% under the US–Philippines treaty if a W-8BEN is on file). VOO yields around 1.2% a year, so this costs a few tenths of a percent a year. Log dividends after tax.</p>
+        <p>US estate tax can apply to non-US investors holding over $60,000 of US assets. That's years away at this pace, but worth knowing about later.</p>
+        <p>Keep an emergency fund outside the market (the cash buffer in settings). Selling in a crash to pay a bill is the one way to really lose money in an index fund.</p>
+      </div></details>
+    </div>
+  </section>
 
   <footer class="a-foot foot">
     <button class="btn mini" id="expBtn">Export backup</button>
@@ -279,6 +427,7 @@ details.learn p + p{margin-top:8px}
 <dialog id="txDlg">
   <form method="dialog" id="txForm">
     <h3 id="txTitle">Log</h3>
+    <p class="tx-what" id="txWhat"></p>
     <label data-f="sym">Ticker<input name="sym" autocapitalize="characters" autocomplete="off" placeholder="VOO"></label>
     <label>Date<input name="date" type="date" required></label>
     <label data-f="php"><span id="phpLbl">Amount (₱)</span><input name="php" type="number" step="0.01" min="0" inputmode="decimal"></label>
