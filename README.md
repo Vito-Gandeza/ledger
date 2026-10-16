@@ -83,6 +83,25 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
   cost. Week one carries everything already overdue, and an allowance is only counted as
   incoming income while it has not been claimed — a claimed one already sits in the balance.
 
+## Invest (`invest/`)
+
+A companion page for a Gotrade (US stocks) account, linked from Ledger's top bar. It reads
+Ledger's data on the same device (and, with sync on, Ledger's cloud copy) but never writes it.
+
+- **What to do now.** Overdue payments and "cash minus 30 days of dues minus a buffer" from
+  Ledger come first; then uninvested Gotrade cash; then the next scheduled deposit.
+- **Deposits & fees.** The ₱45 flat fee against the return lost while cash waits, per cadence,
+  plus a calculator for one deposit at Gotrade's rate vs the ECB mid-market rate.
+- **What to buy.** Splits cash toward the plan's weights (e.g. `VOO 90, NVDA 10`), buying only.
+  Optional dip tilt: a fund some % under its 52-week high gets double weight that round.
+- **Holdings, market watch, compounding projection, activity log.** Everything is derived from
+  the logged deposits, buys, sells, dividends and withdrawals.
+- Prices come from `api/chart.js`, a Vercel function proxying Yahoo (it blocks browser calls).
+  Locally, `node dev.js` serves the site and runs that function; `npx serve` cannot.
+- Sync: the Invest row's code is derived from Ledger's sync code, so a linked device gets it
+  with no extra setup, in its own row.
+- Self-check: `invest/?test`.
+
 ## Layout
 
 Four files, loaded as plain classic scripts in order — no modules, no build step, so it

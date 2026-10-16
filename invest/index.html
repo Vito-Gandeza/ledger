@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Invest">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme:dark)">
+<meta name="theme-color" content="#f2f2f5" media="(prefers-color-scheme:light)">
+<title>Invest</title>
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../icon.svg">
+<style>
+/* Same tokens as Ledger so the two pages read as one app. Chart series colours are the
+   dataviz reference blue/orange pair, stepped separately for light and dark. */
+:root{
+  --bg:#f2f2f5; --fg:#1d1d1f; --fg2:#424245; --dim:#6e6e73;
+  --line:#d8d8dd; --line-soft:#ebebef; --card:#ffffff; --sunk:#f6f6f8;
+  --accent:#0066cc; --accent-hi:#0071e3; --on-accent:#ffffff;
+  --good:#117a48; --warn:#9a530c; --bad:#c9332b;
+  --s1:#2a78d6; --s2:#eb6834;
+  --r:18px; --r-md:12px; --r-sm:8px; --pill:9999px;
+  --pad:clamp(16px,4.2vw,32px); --maxw:760px; --nav:52px;
+  --ease:cubic-bezier(.22,1,.36,1);
+  --lift:0 1px 2px rgba(0,0,0,.04), 0 6px 16px -10px rgba(0,0,0,.14);
+  --lift-hi:0 1px 2px rgba(0,0,0,.05), 0 18px 40px -22px rgba(0,0,0,.28);
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#000000; --fg:#f5f5f7; --fg2:#c7c7cc; --dim:#98989d;
+         --line:#38383a; --line-soft:#2c2c2e; --card:#1c1c1e; --sunk:#2c2c2e;
+         --accent:#2997ff; --accent-hi:#409cff;
+         --good:#30d158; --warn:#ff9f0a; --bad:#ff453a;
+         --s1:#3987e5; --s2:#d95926;
+         --lift:0 0 0 1px rgba(255,255,255,.04), 0 6px 18px -10px rgba(0,0,0,.8);
+         --lift-hi:0 0 0 1px rgba(255,255,255,.06), 0 20px 44px -24px rgba(0,0,0,1); }
+}
+*{box-sizing:border-box; margin:0; padding:0}
+html{-webkit-text-size-adjust:100%; overflow-x:hidden; background:var(--bg)}
+body{background:var(--bg); color:var(--fg);
+  font:400 17px/1.47 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,"Segoe UI",Inter,sans-serif;
+  letter-spacing:-.374px; font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+h2{font-size:21px; font-weight:600; line-height:1.19; letter-spacing:-.01em}
+h3{font-size:21px; font-weight:600; line-height:1.24; letter-spacing:-.02em}
+b,strong{font-weight:600}
+.eyebrow{font-size:13px; font-weight:600; color:var(--dim)}
+.sub{font-size:13.5px; line-height:1.38; color:var(--dim); letter-spacing:-.224px}
+.ok{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)} .dim{color:var(--dim)}
+.num{font-variant-numeric:tabular-nums; letter-spacing:-.02em}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:20px var(--pad) calc(env(safe-area-inset-bottom) + 72px)}
+
+.topbar{position:sticky; top:0; z-index:40; padding-top:env(safe-area-inset-top);
+  background:color-mix(in srgb, var(--bg) 78%, transparent);
+  -webkit-backdrop-filter:saturate(180%) blur(20px); backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:1px solid var(--line-soft)}
+.topbar .inner{max-width:var(--maxw); margin:0 auto; min-height:var(--nav); padding:7px var(--pad);
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.topbar .mk{font-weight:600; font-size:19px; letter-spacing:-.02em; margin-right:auto}
+.topbar .mk a{text-decoration:none; color:var(--dim); font-weight:400; font-size:15px; margin-right:6px}
+
+/* Two independent columns on desktop (as in Ledger); on mobile they dissolve into one stack. */
+.dash{display:flex; flex-direction:column; gap:28px}
+.dash > *, .col > *{min-width:0}
+.col{display:contents}
+@media (max-width:1079px){
+  .a-hero{order:0} .a-now{order:1} .a-buy{order:2} .a-dep{order:3} .a-hold{order:4}
+  .a-proj{order:5} .a-mkt{order:6} .a-act{order:7} .a-learn{order:8} .a-foot{order:9}
+}
+@media (min-width:1080px){
+  :root{--maxw:1200px}
+  .dash{display:grid; gap:28px 26px; align-items:start; grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .a-hero, .a-foot{grid-column:1 / -1}
+  .col{display:flex; flex-direction:column; gap:28px}
+}
+
+.hero{background:var(--card); border:1px solid var(--line); border-radius:var(--r);
+  box-shadow:var(--lift-hi); padding:24px; position:relative; overflow:hidden}
+.hero::before{content:""; position:absolute; inset:0 0 auto 0; height:150px; pointer-events:none;
+  background:radial-gradient(120% 100% at 0% 0%, color-mix(in srgb,var(--accent) 12%,transparent), transparent 70%)}
+.hero > *{position:relative}
+.big{font-size:clamp(38px,10.5vw,52px); font-weight:600; line-height:1.05; letter-spacing:-.035em; margin:4px 0 6px}
+.split{display:grid; gap:16px 20px; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); padding-top:18px}
+.split .v{font-size:20px; font-weight:600; letter-spacing:-.02em; margin-top:2px}
+.tip{margin-top:12px; padding:13px 16px; border-radius:var(--r-md); font-size:15px; line-height:1.42;
+  border:1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background:color-mix(in srgb, var(--accent) 9%, var(--card))}
+.tip.warn{border-color:color-mix(in srgb, var(--warn) 35%, transparent); background:color-mix(in srgb, var(--warn) 10%, var(--card))}
+.tip.bad{border-color:color-mix(in srgb, var(--bad) 35%, transparent); background:color-mix(in srgb, var(--bad) 10%, var(--card))}
+.tip.dim{border-color:var(--line); background:var(--sunk)}
+.tip .lbl{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-right:6px}
+
+.shead{display:flex; align-items:center; justify-content:space-between; margin-bottom:13px; gap:10px 14px; flex-wrap:wrap}
+.shead .acts{display:flex; gap:8px; flex-wrap:wrap}
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--lift); overflow:hidden}
+.pad{padding:18px 20px}
+.row{display:flex; align-items:center; gap:3px 12px; flex-wrap:wrap; padding:12px 16px; border-bottom:1px solid var(--line-soft)}
+.row:last-child{border-bottom:0}
+.grow{flex:1 1 120px; min-width:0}
+.amt{white-space:nowrap; font-weight:600}
+.empty{padding:20px; color:var(--dim); font-size:15px}
+
+table{width:100%; border-collapse:collapse; font-size:14.5px}
+th{font-size:12px; font-weight:600; color:var(--dim); text-align:right; padding:10px 12px; border-bottom:1px solid var(--line)}
+td{padding:10px 12px; text-align:right; border-bottom:1px solid var(--line-soft); white-space:nowrap}
+th:first-child, td:first-child{text-align:left}
+tr:last-child td{border-bottom:0}
+tr.best td{background:color-mix(in srgb, var(--accent) 9%, transparent)}
+.scroll{overflow-x:auto; -webkit-overflow-scrolling:touch}
+.chip{display:inline-block; font-size:12px; font-weight:600; padding:2px 8px; border-radius:var(--pill);
+  border:1px solid var(--line); color:var(--fg2); margin:2px 0 0}
+.chip.sale{border-color:color-mix(in srgb, var(--s1) 60%, transparent); color:var(--fg)}
+.spark{display:block; width:110px; height:30px}
+.spark polyline{fill:none; stroke:var(--s1); stroke-width:1.5; stroke-linejoin:round}
+
+.chartbox{position:relative}
+.chartbox svg{display:block; width:100%; height:auto; touch-action:pan-y}
+.chartbox .grid line{stroke:var(--line-soft)}
+.chartbox text{fill:var(--dim); font-size:11px; letter-spacing:0}
+.chartbox .l1{fill:none; stroke:var(--s1); stroke-width:2}
+.chartbox .l2{fill:none; stroke:var(--s2); stroke-width:2}
+.chartbox .gap{fill:var(--s2); opacity:.12}
+.chartbox .xh{stroke:var(--fg2); stroke-width:1; stroke-dasharray:3 3}
+.chartbox .dot1{fill:var(--s1); stroke:var(--card); stroke-width:2}
+.chartbox .dot2{fill:var(--s2); stroke:var(--card); stroke-width:2}
+.tt{position:absolute; pointer-events:none; background:var(--card); border:1px solid var(--line);
+  box-shadow:var(--lift-hi); border-radius:var(--r-sm); padding:8px 10px; font-size:13px; line-height:1.45;
+  white-space:nowrap; transform:translate(-50%, -100%); opacity:0; transition:opacity .12s}
+.legend{display:flex; gap:16px; font-size:13px; color:var(--fg2); margin:4px 0 10px; flex-wrap:wrap}
+.legend i{display:inline-block; width:14px; height:3px; border-radius:2px; vertical-align:middle; margin-right:6px}
+.sw{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:1px}
+
+.btn{border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:var(--pill);
+  padding:8px 16px; font:inherit; font-size:15px; min-height:36px; white-space:nowrap; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px; text-decoration:none;
+  transition:transform .16s var(--ease)}
+.btn:active{transform:scale(.95)}
+.btn:focus-visible{outline:2px solid var(--accent-hi); outline-offset:2px}
+.btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent)}
+.btn.ghost{border-color:transparent; background:none; color:var(--accent); padding:8px 10px}
+.btn.mini{padding:5px 12px; font-size:13px; min-height:30px}
+.btn.bad{color:var(--bad)}
+.x{background:none; border:0; color:var(--dim); font-size:18px; cursor:pointer; padding:2px 6px; line-height:1}
+
+input,select{font:inherit; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:var(--r-md);
+  padding:10px 12px; font-size:17px; width:100%; min-height:44px}
+input:focus,select:focus{outline:0; border-color:var(--accent-hi)}
+input[type=checkbox]{width:20px; min-height:20px; height:20px; vertical-align:middle; margin-right:8px}
+label{display:block; margin-bottom:14px; font-size:14px; color:var(--fg2)}
+label > input, label > select{margin-top:5px}
+.two{display:grid; grid-template-columns:1fr 1fr; gap:0 12px}
+.calc{display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:6px}
+.calc label{flex:1 1 140px; margin:0}
+
+dialog{border:0; border-radius:20px; background:var(--card); color:var(--fg); padding:24px; margin:auto;
+  width:min(460px,calc(100vw - 32px)); max-height:88vh; box-shadow:var(--lift-hi)}
+dialog::backdrop{background:rgba(0,0,0,.45); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px)}
+dialog h3{margin-bottom:16px}
+.dact{display:flex; gap:10px; justify-content:flex-end; margin-top:6px; flex-wrap:wrap}
+.hint{font-size:13px; color:var(--dim); margin:-8px 0 14px; line-height:1.4}
+
+details.learn{border-bottom:1px solid var(--line-soft)}
+details.learn:last-child{border-bottom:0}
+details.learn > summary{padding:13px 18px; cursor:pointer; font-weight:600; font-size:16px}
+details.learn > div{padding:0 18px 16px; font-size:15px; color:var(--fg2); line-height:1.5}
+details.learn p + p{margin-top:8px}
+.foot{font-size:13px; color:var(--dim); line-height:1.5; display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+</style>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="inner">
+    <span class="mk"><a href="../">&#8249; Ledger</a>Invest</span>
+    <span class="sub" id="note"></span>
+    <button class="btn mini" id="refreshBtn">Refresh prices</button>
+    <button class="btn mini" id="setBtn">Plan &amp; settings</button>
+  </div>
+</nav>
+
+<main class="wrap">
+<div class="dash">
+
+  <header class="a-hero hero">
+    <div class="eyebrow">Gotrade portfolio</div>
+    <div class="big num" id="hVal">—</div>
+    <div class="sub" id="hSub"></div>
+    <div class="split" id="hSplit"></div>
+    <div id="coach" style="margin-top:8px"></div>
+  </header>
+
+  <div class="col">
+    <section class="a-now">
+      <div class="shead"><h2>Your money right now</h2><span class="sub">from Ledger</span></div>
+      <div class="card" id="now"></div>
+    </section>
+
+    <section class="a-buy">
+      <div class="shead"><h2>What to buy</h2></div>
+      <div class="card pad" id="buy"></div>
+    </section>
+
+    <section class="a-hold">
+      <div class="shead"><h2>Holdings</h2></div>
+      <div class="card" id="hold"></div>
+    </section>
+
+    <section class="a-act">
+      <div class="shead"><h2>Activity</h2>
+        <div class="acts">
+          <button class="btn mini" data-log="deposit">+ Deposit</button>
+          <button class="btn mini" data-log="buy">+ Buy</button>
+          <button class="btn mini" data-log="sell">Sell</button>
+          <button class="btn mini" data-log="div">Dividend</button>
+          <button class="btn mini" data-log="withdraw">Withdraw</button>
+        </div>
+      </div>
+      <div class="card" id="act"></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="a-proj">
+      <div class="shead"><h2>Compounding</h2><span class="sub" id="projSub"></span></div>
+      <div class="card pad">
+        <div class="legend"><span><i style="background:var(--s2)"></i>Value</span><span><i style="background:var(--s1)"></i>What you put in</span></div>
+        <div class="chartbox" id="proj"></div>
+        <div id="miles" class="sub" style="margin-top:10px"></div>
+      </div>
+    </section>
+
+    <section class="a-dep">
+      <div class="shead"><h2>Deposits &amp; fees</h2></div>
+      <div class="card pad" id="dep"></div>
+    </section>
+
+    <section class="a-mkt">
+      <div class="shead"><h2>Market watch</h2><span class="sub" id="mktSub"></span></div>
+      <div class="card scroll" id="mkt"></div>
+    </section>
+
+    <section class="a-learn">
+      <div class="shead"><h2>The basics</h2></div>
+      <div class="card" id="learn">
+        <details class="learn"><summary>Why index funds (VOO, VTI, SPY)</summary><div>
+          <p>An index fund buys every company in an index, so one share spreads your money across hundreds of businesses. You don't need to pick winners — you own the market and earn the market's return, minus a tiny fee.</p>
+          <p><b>VOO</b> and <b>SPY</b> both track the S&amp;P 500 (the 500 largest US companies). They move almost identically; VOO's yearly fee is 0.03% vs SPY's 0.09%, so for buy-and-hold VOO is the cheaper copy. <b>VTI</b> holds the whole US market (~3,500 companies) at 0.03%; it's about 85% the same as VOO. Owning both adds little. Pick one as your core.</p>
+          <p>The S&amp;P 500 has averaged roughly 10% a year since 1957 (about 7% after US inflation), but with drops of 20–50% along the way. The average only works if you stay in through the drops.</p>
+        </div></details>
+        <details class="learn"><summary>Buying regularly vs. buying the dip</summary><div>
+          <p>Putting in a fixed amount on a schedule (dollar-cost averaging) buys more shares when prices are low and fewer when high, automatically. It also removes the hardest part — deciding when.</p>
+          <p>Waiting for a dip usually loses: markets spend most of their time near highs, and cash sitting out while you wait misses the gains. The "dip tilt" in settings only shifts <i>where</i> each scheduled deposit goes (toward a fund that's down from its high); it never delays buying.</p>
+          <p>Single stocks can fall 50–90% and never recover — that happens to index funds far less. If you want some, cap them at a small slice (say 10%) and keep the core in an index fund.</p>
+        </div></details>
+        <details class="learn"><summary>What Gotrade actually costs you</summary><div>
+          <p><b>Deposit fee:</b> ₱45 flat. On ₱1,000 that's 4.5%; on ₱6,000 it's 0.75%. Since it's flat, fewer and bigger deposits cost less — see "Deposits &amp; fees" for the math on your numbers.</p>
+          <p><b>Exchange rate:</b> Gotrade's rate is worse than the mid-market rate, both ways (about 2% each way when this was built). That's a ~4% round trip, which is why you buy and hold instead of moving money in and out.</p>
+          <p><b>Withdrawal:</b> $5 per withdrawal, plus the spread.</p>
+        </div></details>
+        <details class="learn"><summary>Taxes and other things to know</summary><div>
+          <p>US funds hold back tax on dividends for non-US investors (commonly 30%, or 25% under the US–Philippines treaty if a W-8BEN is on file). VOO yields around 1.2% a year, so this costs a few tenths of a percent a year. Log dividends after tax.</p>
+          <p>US estate tax can apply to non-US investors holding over $60,000 of US assets. That's years away at this pace, but worth knowing about later.</p>
+          <p>Keep an emergency fund outside the market (the cash buffer in settings). Selling in a crash to pay a bill is the one way to really lose money in an index fund.</p>
+        </div></details>
+      </div>
+    </section>
+  </div>
+
+  <footer class="a-foot foot">
+    <button class="btn mini" id="expBtn">Export backup</button>
+    <button class="btn mini" id="impBtn">Import backup</button>
+    <input type="file" id="impFile" accept=".json,application/json" hidden>
+    <span>Not financial advice. The plan here is the one you set; the page only applies it. Prices are delayed (Yahoo, ~15 min); the mid-market peso rate is the ECB daily rate. Gotrade's own rate is the one you actually get.</span>
+  </footer>
+
+</div>
+</main>
+
+<dialog id="txDlg">
+  <form method="dialog" id="txForm">
+    <h3 id="txTitle">Log</h3>
+    <label data-f="sym">Ticker<input name="sym" autocapitalize="characters" autocomplete="off" placeholder="VOO"></label>
+    <label>Date<input name="date" type="date" required></label>
+    <label data-f="php"><span id="phpLbl">Amount (₱)</span><input name="php" type="number" step="0.01" min="0" inputmode="decimal"></label>
+    <label data-f="usd"><span id="usdLbl">Amount ($)</span><input name="usd" type="number" step="0.01" min="0" inputmode="decimal"></label>
+    <label data-f="shares">Shares<input name="shares" type="number" step="any" min="0" inputmode="decimal"></label>
+    <p class="hint" id="txHint"></p>
+    <div class="dact"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="ok">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="setDlg">
+  <form method="dialog" id="setForm">
+    <h3>Plan &amp; settings</h3>
+    <label>Your plan — ticker and percent<input name="plan" placeholder="VOO 100" autocapitalize="characters"></label>
+    <p class="hint">Example: <b>VOO 90, NVDA 10</b>. Each deposit's buy plan steers your holdings toward these weights.</p>
+    <label>Also watch<input name="watch" placeholder="VTI, SPY, QQQM" autocapitalize="characters"></label>
+    <div class="two">
+      <label>Set aside per week (₱)<input name="weekly" type="number" min="0" step="50"></label>
+      <label>Deposit every (weeks)<input name="every" type="number" min="1" max="26" step="1"></label>
+      <label>Expected return (%/yr)<input name="ret" type="number" min="0" max="30" step="0.5"></label>
+      <label>Projection (years)<input name="years" type="number" min="1" max="50" step="1"></label>
+      <label>Cash buffer to keep (₱)<input name="buffer" type="number" min="0" step="500"></label>
+      <label>FX spread (%)<input name="spread" type="number" min="0" max="10" step="0.1"></label>
+      <label>Deposit fee (₱)<input name="fee" type="number" min="0" step="1"></label>
+      <label>Withdraw fee ($)<input name="wdFee" type="number" min="0" step="0.5"></label>
+      <label>Minimum deposit (₱)<input name="minDep" type="number" min="0" step="0.01"></label>
+      <label>Dip = under 52-wk high by (%)<input name="dipPct" type="number" min="1" max="60" step="1"></label>
+    </div>
+    <label><input type="checkbox" name="tilt">Dip tilt: give a fund that's down by that much double weight in the buy plan</label>
+    <div class="dact"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="ok">Save</button></div>
+  </form>
+</dialog>
+
+<script src="../data.js"></script>
+<script src="invest.js"></script>
+</body>
+</html>

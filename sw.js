@@ -20,7 +20,9 @@ self.addEventListener("activate", e => {
 });
 
 self.addEventListener("fetch", e => {
-  if (e.request.method !== "GET" || new URL(e.request.url).origin !== location.origin) return;
+  const u = new URL(e.request.url);
+  // Prices must never come out of a cache-first shelf: that shows yesterday's quote as live.
+  if (e.request.method !== "GET" || u.origin !== location.origin || u.pathname.startsWith("/api/")) return;
   const isDoc = e.request.mode === "navigate" || e.request.destination === "document"
     || e.request.destination === "script";
   e.respondWith(
