@@ -16,29 +16,32 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <style>
 /* ============================================================
-   One accent colour, hairline borders, and restrained elevation. Cards lift off the
-   canvas just enough to read as objects; nothing uses a heavy drop shadow.
+   Apple direction, taken from Apple's own surfaces (VoltAgent/awesome-design-md "apple",
+   dickwu/apple-design-skill's HIG lenses) and kept to the achromatic-ledger rules:
+   the chrome is ink on a blue-grey ground, cards are flat white with a 1px edge and no
+   shadow at rest, and Action Blue goes on money that moves and on the one primary
+   action. Shadows only on what floats (a dialog, a menu).
    Variable NAMES are load-bearing — several are referenced from inline styles in the
    render templates below.
    ============================================================ */
 :root{
-  --bg:#f2f2f5; --fg:#1d1d1f; --fg2:#424245; --dim:#6e6e73;
-  --line:#d8d8dd; --line-soft:#ebebef; --card:#ffffff; --sunk:#f6f6f8;
+  --bg:#f2f4f7; --fg:#1d1d1f; --fg2:#424245; --dim:#6e6e73;
+  --line:#e1e3e8; --line-soft:#eceef2; --card:#ffffff; --sunk:#f6f7f9; --fill:#e8e9ee;
   --accent:#0066cc; --accent-hi:#0071e3; --on-accent:#ffffff;
   --good:#117a48; --warn:#9a530c; --bad:#c9332b;
   --r:18px; --r-md:12px; --r-sm:8px; --pill:9999px;
-  --pad:clamp(16px,4.2vw,32px); --maxw:760px; --nav:52px;
+  --pad:clamp(16px,4.2vw,32px); --maxw:760px; --nav:52px; --side:244px; --tabh:56px;
   --ease:cubic-bezier(.22,1,.36,1);
-  --lift:0 1px 2px rgba(0,0,0,.04), 0 6px 16px -10px rgba(0,0,0,.14);
-  --lift-hi:0 1px 2px rgba(0,0,0,.05), 0 18px 40px -22px rgba(0,0,0,.28);
+  --lift:none;
+  --lift-hi:0 1px 2px rgba(0,0,0,.06), 0 22px 48px -18px rgba(0,0,0,.3);
 }
 @media (prefers-color-scheme:dark){
   :root{ --bg:#000000; --fg:#f5f5f7; --fg2:#c7c7cc; --dim:#98989d;
-         --line:#38383a; --line-soft:#2c2c2e; --card:#1c1c1e; --sunk:#2c2c2e;
+         --line:#2c2c2e; --line-soft:#242426; --card:#1c1c1e; --sunk:#232325; --fill:#2c2c2e;
          --accent:#2997ff; --accent-hi:#409cff;
          --good:#30d158; --warn:#ff9f0a; --bad:#ff453a;
-         --lift:0 0 0 1px rgba(255,255,255,.04), 0 6px 18px -10px rgba(0,0,0,.8);
-         --lift-hi:0 0 0 1px rgba(255,255,255,.06), 0 20px 44px -24px rgba(0,0,0,1); }
+         --lift:none;
+         --lift-hi:0 0 0 1px rgba(255,255,255,.08), 0 24px 50px -20px rgba(0,0,0,1); }
 }
 
 *{box-sizing:border-box; margin:0; padding:0}
@@ -62,52 +65,108 @@ b,strong{font-weight:600}
 .sub{font-size:13.5px; line-height:1.38; color:var(--dim); letter-spacing:-.224px}
 .ok{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)} .dim{color:var(--dim)}
 
-/* ---------- frosted top bar ---------- */
-.topbar{position:sticky; top:0; z-index:40; width:100%;
-  padding-top:env(safe-area-inset-top);
-  background:color-mix(in srgb, var(--bg) 78%, transparent);
-  -webkit-backdrop-filter:saturate(180%) blur(20px); backdrop-filter:saturate(180%) blur(20px);
+/* ---------- shell ----------
+   HIG: a few top-level destinations, never more than five. A labelled sidebar on a wide
+   screen, a tab bar at the bottom on a phone, both built from the same <nav>. Every tab is
+   a view of the same data, so a change made in one is already true in the others.
+   Grid arithmetic (desktop, >=1180px): sidebar 244 + canvas; the canvas holds one view of
+   two columns 1.05fr / 1fr with a 26px gutter, both ending on the canvas edges. */
+.side{position:fixed; inset:0 auto 0 0; width:var(--side); z-index:45; display:flex; flex-direction:column;
+  padding:calc(env(safe-area-inset-top) + 18px) 12px 16px; border-right:1px solid var(--line); background:var(--bg)}
+.brand{display:flex; align-items:center; gap:10px; padding:4px 10px 22px; font-size:19px; font-weight:600; letter-spacing:-.02em}
+.brand .mono{width:30px; height:30px; border-radius:8px; background:var(--fg); color:var(--bg); display:grid; place-items:center;
+  font-size:17px; font-weight:600}
+.tabs{display:flex; flex-direction:column; gap:2px}
+.tabs a{display:flex; align-items:center; gap:11px; min-height:38px; padding:0 10px; border-radius:9px;
+  color:var(--fg2); text-decoration:none; font-size:15px; transition:background .15s var(--ease), color .15s}
+.tabs a svg{width:19px; height:19px; flex:none; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round}
+@media (hover:hover){ .tabs a:hover{background:var(--fill); color:var(--fg)} }
+.tabs a[aria-current]{background:var(--fill); color:var(--fg); font-weight:600}
+.tabs a:focus-visible{outline:2px solid var(--accent-hi); outline-offset:-2px}
+.badge{margin-left:auto; min-width:20px; height:20px; padding:0 6px; border-radius:var(--pill); background:var(--bad);
+  color:#fff; font-size:12px; font-weight:600; display:grid; place-items:center; letter-spacing:0}
+.side .foot{margin-top:auto; display:grid; gap:2px}
+.side .foot a, .side .foot button{display:flex; align-items:center; gap:11px; min-height:36px; padding:0 10px; border-radius:9px;
+  color:var(--dim); font-size:14px; text-decoration:none; text-align:left; width:100%}
+@media (hover:hover){ .side .foot a:hover, .side .foot button:hover{background:var(--fill); color:var(--fg)} }
+.side .foot svg{width:17px; height:17px; flex:none; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round}
+.side .foot .note{font-size:12px; color:var(--dim); padding:8px 10px 0; line-height:1.35}
+body > .wrap, .appbar{margin-left:var(--side)}
+.appbar{position:sticky; top:0; z-index:40; background:var(--bg); padding-top:env(safe-area-inset-top);
   border-bottom:1px solid transparent; transition:border-color .25s var(--ease)}
-body.scrolled .topbar{border-bottom-color:var(--line)}
-.topbar .inner{max-width:var(--maxw); margin:0 auto; min-height:var(--nav);
-  padding:7px var(--pad); display:flex; align-items:center; gap:8px; flex-wrap:wrap}
-.topbar .mk{font-weight:600; font-size:19px; letter-spacing:-.02em; margin-right:auto}
-body[data-state="empty"] .topbar{display:none}
+body.scrolled .appbar{border-bottom-color:var(--line)}
+.appbar .inner{max-width:var(--maxw); margin:0 auto; min-height:64px; padding:10px var(--pad);
+  display:flex; align-items:center; gap:8px}
+.appbar h1{font-size:24px; font-weight:600; letter-spacing:-.025em; line-height:1.15; margin-right:auto; white-space:nowrap}
+.appbar .icn{width:36px; height:36px; min-height:36px; padding:0; border-radius:var(--pill)}
+.appbar .icn svg{width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round}
+.demo{font-size:13px; color:var(--fg2); background:var(--fill); border-radius:var(--pill); padding:6px 12px; white-space:nowrap}
+.demo a{color:var(--accent); text-decoration:none; font-weight:600; margin-left:4px}
+body[data-state="empty"] .side, body[data-state="empty"] .appbar{display:none}
+body[data-state="empty"] > .wrap{margin-left:0}
 
-/* ---------- dashboard layout ----------
-   Two INDEPENDENT columns on desktop, not a row-based grid. A grid syncs the heights of
-   sections sitting in the same row, so a tall calendar next to a short card left a block
-   of dead space under the short one — and expanding a week pushed unrelated sections
-   around. Each column is its own flex stack, so nothing outside it moves.
-   On mobile the wrappers dissolve with display:contents and every section becomes a
-   direct child of the single-column stack, in DOM order. */
-.dash{display:flex; flex-direction:column; gap:28px}
-.dash > *, .col > *{min-width:0}
-.col{display:contents}
-@media (max-width:1079px){
-  .a-hero{order:0} .a-catch{order:1} .a-plan{order:2} .a-weekly{order:3} .a-wallets{order:4}
-  .a-owed{order:5} .a-wish{order:6} .a-cards{order:7} .a-buys{order:8} .a-timeline{order:9}
-  .a-loans{order:10} .a-log{order:11} .a-foot{order:12}
+/* the + New menu: one place to start anything, from any tab */
+.newwrap{position:relative}
+.menu{position:absolute; right:0; top:calc(100% + 8px); z-index:60; min-width:230px; padding:6px;
+  background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--lift-hi)}
+.menu button{display:flex; justify-content:space-between; gap:16px; width:100%; min-height:40px; padding:0 12px;
+  border-radius:9px; font-size:15px; text-align:left; align-items:center; color:var(--fg)}
+.menu button span{color:var(--dim); font-size:13px}
+.menu button:hover, .menu button:focus-visible{background:var(--fill); outline:0}
+.menu hr{border:0; border-top:1px solid var(--line-soft); margin:5px 8px}
+
+/* phone and tablet: the sidebar dissolves; its nav becomes the tab bar */
+@media (max-width:899px){
+  .side{display:contents}
+  .side .brand, .side .foot{display:none}
+  body > .wrap, .appbar{margin-left:0}
+  .appbar .inner{min-height:52px; padding:6px var(--pad)}
+  .appbar h1{font-size:22px}
+  .tabs{position:fixed; left:0; right:0; bottom:0; z-index:45; flex-direction:row; gap:0;
+    background:var(--card); border-top:1px solid var(--line); padding:4px 4px env(safe-area-inset-bottom)}
+  .tabs a{flex:1 1 0; flex-direction:column; justify-content:center; gap:3px; min-height:var(--tabh); padding:0 2px;
+    font-size:11px; font-weight:500; color:var(--dim); position:relative; border-radius:10px}
+  .tabs a svg{width:24px; height:24px}
+  .tabs a[aria-current]{background:none; color:var(--accent); font-weight:600}
+  .tabs .badge{position:absolute; top:3px; left:calc(50% + 6px); margin:0; min-width:18px; height:18px; font-size:11px; padding:0 5px}
+  .wrap{padding-bottom:calc(env(safe-area-inset-bottom) + var(--tabh) + 40px) !important}
+  .hide-phone{display:none !important}
+  .menu{position:fixed; left:12px; right:12px; top:auto; bottom:calc(env(safe-area-inset-bottom) + var(--tabh) + 16px); min-width:0}
 }
-@media (min-width:1080px){
-  :root{--maxw:1200px}
-  .dash{display:grid; gap:28px 26px; align-items:start;
-    grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}
-  .a-hero, .a-foot{grid-column:1 / -1}
-  .col{display:flex; flex-direction:column; gap:28px}
+@media (min-width:900px){ .show-phone{display:none !important} }
+
+/* ---------- views ----------
+   One view per tab. Two INDEPENDENT stacks on a wide canvas, not a row-based grid: a grid
+   syncs the heights of sections in the same row, so a tall card next to a short one left
+   dead space under the short one. */
+.view{display:none; flex-direction:column; gap:28px}
+body[data-tab="today"] .view[data-view="today"], body[data-tab="wallets"] .view[data-view="wallets"],
+body[data-tab="cards"] .view[data-view="cards"], body[data-tab="loans"] .view[data-view="loans"],
+body[data-tab="people"] .view[data-view="people"]{display:flex}
+.view > *, .stack > *{min-width:0}
+.stack{display:contents}
+@media (min-width:1180px){
+  :root{--maxw:1180px}
+  body[data-tab] .view{display:none}
+  body[data-tab="today"] .view[data-view="today"], body[data-tab="wallets"] .view[data-view="wallets"],
+  body[data-tab="cards"] .view[data-view="cards"], body[data-tab="loans"] .view[data-view="loans"],
+  body[data-tab="people"] .view[data-view="people"]{display:grid}
+  .view{gap:28px 26px; align-items:start; grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}
+  .view > .full{grid-column:1 / -1}
+  .stack{display:flex; flex-direction:column; gap:28px}
 }
-@media (min-width:1500px){ :root{--maxw:1440px} }
+@media (min-width:1600px){ :root{--maxw:1320px} }
 
 /* ---------- hero ---------- */
 /* The headline number sits on its own raised surface rather than loose on the canvas —
    without it the most important figure on the page had the least visual weight. */
 .hero{background:var(--card); border:1px solid var(--line); border-radius:var(--r);
-  box-shadow:var(--lift-hi); padding:24px; position:relative; overflow:hidden}
-.hero::before{content:""; position:absolute; inset:0 0 auto 0; height:150px; pointer-events:none;
-  background:radial-gradient(120% 100% at 0% 0%, color-mix(in srgb,var(--accent) 12%,transparent), transparent 70%)}
-.hero > *{position:relative}
-.net{font-size:clamp(38px,10.5vw,52px); font-weight:600; line-height:1.05; letter-spacing:-.035em; margin:4px 0 6px}
-.netnote{font-size:15px; margin-bottom:18px}
+  padding:24px; position:relative; overflow:hidden}
+.net{font-size:clamp(34px,9vw,40px); font-weight:600; line-height:1.05; letter-spacing:-.03em; margin:4px 0 6px}
+.netnote{font-size:15px; margin-bottom:6px}
+/* What is due next, in words, so the first screen answers "am I covered for what is coming?" */
+.nextdue{font-size:15px; color:var(--fg2); margin-bottom:18px}
+.nextdue b{color:var(--fg)}
 /* The rest of the figures are a tap away: six numbers competing at the top of the page
    meant none of them was the headline. */
 .herofold{border-top:1px solid var(--line-soft); margin-top:4px}
@@ -117,6 +176,15 @@ body[data-state="empty"] .topbar{display:none}
 .split{display:grid; gap:16px 20px; grid-template-columns:repeat(auto-fit,minmax(138px,1fr));
   padding-top:18px}
 .split .v{font-size:20px; font-weight:600; letter-spacing:-.02em; margin-top:2px}
+/* On a wide screen the breakdown stays open beside the headline instead of behind a tap. */
+@media (min-width:1180px){
+  .hero{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); column-gap:32px; align-content:start}
+  .hero > *{grid-column:1}
+  .hero > .herofold{grid-column:2; grid-row:1 / span 5; border-top:0; margin:0; padding-left:32px; border-left:1px solid var(--line-soft)}
+  .hero > .herofold > summary{display:none}
+  .hero > .herofold .split{padding-top:6px; grid-template-columns:repeat(2,minmax(0,1fr))}
+  .hero > #alert{grid-column:1 / -1}
+}
 .alertbar{margin-top:18px; padding:13px 16px; border-radius:var(--r-md); font-size:15px; line-height:1.4;
   display:flex; align-items:center; gap:12px; flex-wrap:wrap; color:var(--fg);
   background:color-mix(in srgb, var(--bad) 12%, var(--card));
@@ -132,8 +200,7 @@ body[data-state="empty"] .topbar{display:none}
 /* Own compositor layer per card, so a big innerHTML swap in one cannot tear or ghost
    against what iOS Safari already painted in a neighbour mid-scroll. */
 .card, .plan, .hero{transform:translateZ(0); -webkit-backface-visibility:hidden}
-.card{background:var(--card); border:1px solid var(--line); border-radius:var(--r);
-  overflow:hidden; box-shadow:var(--lift)}
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--r); overflow:hidden}
 .row{display:flex; align-items:center; gap:3px 10px; flex-wrap:wrap;
      padding:13px 16px; border-bottom:1px solid var(--line-soft); transition:background .18s var(--ease)}
 .row:last-child{border-bottom:0}
@@ -180,15 +247,17 @@ body[data-state="empty"] .topbar{display:none}
 
 button,select,input{font:inherit; color:inherit; letter-spacing:inherit}
 button{background:none; border:0; cursor:pointer}
-.btn{border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:var(--pill);
+/* Secondary actions are grey pills; the one primary on a surface is Action Blue. */
+.btn{border:1px solid transparent; background:var(--fill); color:var(--fg); border-radius:var(--pill);
   padding:8px 16px; font-size:15px; font-weight:400; min-height:36px; white-space:nowrap;
   display:inline-flex; align-items:center; justify-content:center; gap:6px;
   transition:transform .16s var(--ease), background .16s, border-color .16s, opacity .16s}
 a.btn{text-decoration:none}   /* "Save image" is a download link styled as a button */
 .btn:active{transform:scale(.95)}
 .btn:focus-visible{outline:2px solid var(--accent-hi); outline-offset:2px}
-.btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent);
-  box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 18px -12px var(--accent)}
+.btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent)}
+@media (hover:hover){ .btn:not(.primary):not(.ghost):not([disabled]):hover{background:color-mix(in srgb, var(--fg) 12%, var(--fill))}
+  .btn.primary:hover{opacity:.88} }
 .btn.ghost{border-color:transparent; background:none; color:var(--accent); padding:8px 10px; box-shadow:none}
 .btn.mini{padding:5px 12px; font-size:13px; min-height:30px}
 .btn.big{padding:12px 24px; font-size:17px; min-height:46px}
@@ -212,14 +281,13 @@ a.btn{text-decoration:none}   /* "Save image" is a download link styled as a but
 .cnt{font-size:12px; color:var(--dim); border:1px solid var(--line); border-radius:var(--pill); padding:1px 8px}
 
 /* ---------- segmented control ---------- */
-.seg{display:inline-flex; background:var(--sunk); border-radius:var(--pill); padding:2px;
-  border:1px solid var(--line-soft); max-width:100%}
+.seg{display:inline-flex; background:var(--fill); border-radius:var(--pill); padding:2px; max-width:100%}
 .seg label{position:relative; flex:1 1 auto; margin:0; display:block}
 .seg input{position:absolute; opacity:0; width:100%; height:100%; left:0; top:0; margin:0;
   min-height:0; padding:0; border:0; cursor:pointer}
 .seg span{display:block; text-align:center; font-size:13.5px; padding:6px 13px; border-radius:var(--pill);
   color:var(--fg2); white-space:nowrap; transition:background .2s var(--ease), color .2s}
-.seg input:checked + span{background:var(--card); color:var(--fg); font-weight:600; box-shadow:var(--lift)}
+.seg input:checked + span{background:var(--card); color:var(--fg); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.1)}
 .seg input:focus-visible + span{outline:2px solid var(--accent-hi); outline-offset:1px}
 
 /* ---------- inputs ---------- */
@@ -253,7 +321,7 @@ dialog{border:0; border-radius:20px; background:var(--card); color:var(--fg); pa
   transition:opacity .26s var(--ease), transform .26s var(--ease), overlay .26s allow-discrete, display .26s allow-discrete}
 dialog[open]{opacity:1; transform:none}
 @starting-style{ dialog[open]{opacity:0; transform:translateY(12px) scale(.97)} }
-dialog::backdrop{background:rgba(0,0,0,.4); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+dialog::backdrop{background:rgba(0,0,0,.42);
   opacity:0; transition:opacity .26s, overlay .26s allow-discrete, display .26s allow-discrete}
 dialog[open]::backdrop{opacity:1}
 @starting-style{ dialog[open]::backdrop{opacity:0} }
@@ -262,7 +330,7 @@ dialog h3{margin-bottom:20px}
 .hint{font-size:13.5px; color:var(--dim); margin:-8px 0 16px; line-height:1.4}
 
 /* ---------- funding plan ---------- */
-.plan{border:1px solid var(--line); border-radius:var(--r); padding:20px; background:var(--card); box-shadow:var(--lift)}
+.plan{border:1px solid var(--line); border-radius:var(--r); padding:20px; background:var(--card)}
 .plan .big{font-size:32px; font-weight:600; letter-spacing:-.03em; margin:4px 0; line-height:1.1}
 .move{display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--line-soft); flex-wrap:wrap}
 .move:last-child{border-bottom:0}
@@ -280,10 +348,11 @@ dialog h3{margin-bottom:20px}
    the rows below it are the detail behind each bar. */
 .wkchartwrap{padding:16px 16px 10px; border-bottom:1px solid var(--line-soft)}
 .wkchart{display:block; width:100%; height:78px}
-.wkchart rect.pos{fill:var(--accent)}
-.wkchart rect.neg{fill:var(--bad)}
-.wkchart rect.sel{opacity:1}
-.wkchart rect{opacity:.85}
+/* This week is the one bar in full blue; the weeks ahead are the same hue, paler. */
+.wkchart rect.pos{fill:color-mix(in srgb, var(--accent) 34%, var(--card))}
+.wkchart rect.neg{fill:color-mix(in srgb, var(--bad) 45%, var(--card))}
+.wkchart rect.pos.sel{fill:var(--accent)}
+.wkchart rect.neg.sel{fill:var(--bad)}
 .wkchart line.zero{stroke:var(--line); stroke-width:1; vector-effect:non-scaling-stroke}
 .wkaxis{display:flex; justify-content:space-between; font-size:11.5px; color:var(--dim); padding-top:7px}
 .wkw{border-bottom:1px solid var(--line-soft)}
@@ -331,10 +400,10 @@ dialog h3{margin-bottom:20px}
 .day.late{background:color-mix(in srgb, var(--bad) 13%, transparent); border-color:color-mix(in srgb, var(--bad) 40%, transparent)}
 .day.today{outline:2px solid var(--accent); outline-offset:-2px; background:color-mix(in srgb, var(--accent) 12%, var(--sunk))}
 .day.today .n{color:var(--accent)}
-.day .tag{font-size:8px; color:var(--accent); line-height:1; font-weight:600}
+.day .tag{font-size:11px; color:var(--fg); line-height:1; font-weight:600}
 .day .dots{display:flex; gap:2px; flex-wrap:wrap; justify-content:center}
 .day .dots i{width:6px; height:6px; border-radius:var(--pill)}
-.day .a{font-size:10px; letter-spacing:-.02em; margin-top:auto; color:var(--fg2)}
+.day .a{font-size:11px; letter-spacing:-.02em; margin-top:auto; color:var(--fg2)}
 .day.blank{visibility:hidden}
 .tlfoot{padding:13px 16px; font-size:13.5px; color:var(--dim); display:flex; gap:10px; flex-wrap:wrap}
 
@@ -344,17 +413,14 @@ dialog h3{margin-bottom:20px}
    The band runs the full width of the section and the statements flow straight out of it. */
 .ccwrap{padding:0; overflow:hidden}
 .ccwrap .cardface{padding:0; border-bottom:0}
-.ccband{position:relative; overflow:hidden; padding:20px 20px 18px; color:#fff;
-  background:linear-gradient(145deg, var(--b), color-mix(in srgb, var(--b) 48%, #06070c))}
-.ccband::after{content:""; position:absolute; inset:0; pointer-events:none;
-  background:radial-gradient(120% 120% at 88% -10%, rgba(255,255,255,.26), transparent 62%)}
+/* The issuer's colour, a step darker so white type holds 4.5:1 on light brand colours too. */
+.ccband{position:relative; overflow:hidden; padding:20px 20px 18px; color:#fff; background:color-mix(in srgb, var(--b) 72%, #000)}
 .ccband > *{position:relative; z-index:1}
 .cchead{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:18px}
 .cchead .mark{height:28px; max-width:120px; object-fit:contain; border-radius:6px; display:block}
 .cchead .mark.txt{font-size:17px; font-weight:600; letter-spacing:-.01em}
-.ccbtn{background:rgba(255,255,255,.16); border-color:rgba(255,255,255,.22); color:#fff;
-  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); box-shadow:none}
-.cclabel{font-size:11px; text-transform:uppercase; letter-spacing:.09em; opacity:.72}
+.ccbtn{background:rgba(255,255,255,.18); border-color:transparent; color:#fff; box-shadow:none}
+.cclabel{font-size:13px; opacity:.78}
 .ccbig{font-size:clamp(30px,8vw,38px); font-weight:600; letter-spacing:-.03em; line-height:1.1; margin-top:3px}
 .cctrack{height:6px; border-radius:var(--pill); background:rgba(255,255,255,.22);
   overflow:hidden; display:flex; margin:16px 0 9px}
@@ -470,29 +536,21 @@ footer{border-top:1px solid var(--line); padding-top:22px; display:flex; gap:10p
 
 /* ---------- welcome ---------- */
 #welcome{max-width:520px; margin:10vh auto; text-align:center}
-#welcome .mark{width:76px; height:76px; margin:0 auto 22px; border-radius:22px;
-  background:var(--accent); color:var(--on-accent); display:flex; align-items:center;
-  justify-content:center; font-size:38px; font-weight:600; box-shadow:var(--lift-hi)}
+#welcome .mark{width:76px; height:76px; margin:0 auto 22px; border-radius:20px;
+  background:var(--fg); color:var(--bg); display:flex; align-items:center;
+  justify-content:center; font-size:38px; font-weight:600}
 #welcome h2{font-size:clamp(34px,9vw,44px); letter-spacing:-.028em; line-height:1.08}
 #welcome p{color:var(--dim); font-size:19px; line-height:1.42; margin:14px 0 30px}
 #welcome .wacts{display:flex; gap:11px; justify-content:center; flex-wrap:wrap}
-body[data-state="empty"] .dash{display:none}
+body[data-state="empty"] .views{display:none}
 body[data-state="empty"] .wrap{padding-top:calc(env(safe-area-inset-top) + 22px)}
 body[data-state="ready"] #welcome{display:none}
 
 /* ---------- motion ---------- */
 @keyframes rise{from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none}}
-body.boot .dash > *:not(:where(.col)), body.boot .col > *{animation:rise .6s var(--ease) backwards}
-body.boot .a-hero{animation-delay:.02s}
-body.boot .a-catch{animation-delay:.07s}
-body.boot .a-plan{animation-delay:.09s}
-body.boot .a-weekly{animation-delay:.16s}
-body.boot .a-wallets{animation-delay:.22s}
-body.boot .a-owed, body.boot .a-wish{animation-delay:.26s}
-body.boot .a-buys{animation-delay:.32s}
-body.boot .a-cards, body.boot .a-timeline{animation-delay:.30s}
-body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
-#welcome{animation:rise .7s var(--ease) backwards .1s}
+#welcome{animation:rise .5s var(--ease) backwards}
+@keyframes pop{from{opacity:0; transform:translateY(-4px) scale(.98)}}
+.menu:not([hidden]){animation:pop .16s var(--ease)}
 ::view-transition-old(root),::view-transition-new(root){animation-duration:.26s; animation-timing-function:var(--ease)}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms !important; transition-duration:.001ms !important}
@@ -500,16 +558,44 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
 }
 </style>
 </head>
-<body class="boot" data-state="empty">
+<body class="boot" data-state="empty" data-tab="today">
 
-<nav class="topbar">
-  <div class="inner">
-    <span class="mk">Ledger</span>
-    <a class="btn mini" href="invest/">Invest</a>
-    <button class="btn mini" id="undoBtn" disabled title="Undo the last change">&#8624; Undo</button>
-    <button class="btn mini" id="syncBtn">Set up sync</button>
+<aside class="side" aria-label="Ledger">
+  <div class="brand"><span class="mono num">&#8369;</span>Ledger</div>
+  <nav class="tabs" id="tabs" aria-label="Sections">
+    <a href="#/today" data-tab="today"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16M7 3.5v3M17 3.5v3"/><rect x="4" y="5" width="16" height="15.5" rx="3"/><path d="M8 11h3v3H8z"/></svg>Today <span class="badge" id="badgeToday" hidden></span></a>
+    <a href="#/wallets" data-tab="wallets"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3"/><rect x="4" y="8" width="16" height="11.5" rx="2.5"/><path d="M15.5 13.75h1.5"/></svg>Wallets</a>
+    <a href="#/cards" data-tab="cards"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h4"/></svg>Cards</a>
+    <a href="#/loans" data-tab="loans"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h9l3.5 3.5v13.5H6z"/><path d="M15 3.5V7h3.5M9 12h6M9 15.5h6"/></svg>Loans</a>
+    <a href="#/people" data-tab="people"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.9-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.8 14.6c2.3-.3 4.2 1.2 4.7 4.4"/></svg>People</a>
+  </nav>
+  <div class="foot">
+    <a href="invest/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-8"/><path d="M15 7h5v5"/></svg>Invest</a>
+    <p class="note">Keys: 1&ndash;5 switch tabs, N starts something new, &#8984;Z or Ctrl+Z undoes.</p>
   </div>
-</nav>
+</aside>
+
+<header class="appbar">
+  <div class="inner">
+    <h1 id="tabTitle">Today</h1>
+    <span class="demo" id="demoNote" hidden>Demo, nothing is saved<a href="./">Leave</a></span>
+    <button class="btn icn" id="undoBtn" disabled title="Undo the last change" aria-label="Undo the last change"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+    <button class="btn mini hide-phone" id="syncBtn">Set up sync</button>
+    <div class="newwrap">
+      <button class="btn primary" id="newBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="newMenu">+ New</button>
+      <div class="menu" id="newMenu" role="menu" aria-label="Start something new" hidden>
+        <button role="menuitem" data-new="addPurchase" data-goto="cards">Card purchase <span>Cards</span></button>
+        <button role="menuitem" data-new="addBuy" data-goto="cards">Other purchase <span>Cards</span></button>
+        <button role="menuitem" data-new="addOwed" data-goto="people">Someone owes me <span>People</span></button>
+        <hr>
+        <button role="menuitem" data-new="addLoan" data-goto="loans">Instalment loan <span>Loans</span></button>
+        <button role="menuitem" data-new="addCard" data-goto="cards">Credit card <span>Cards</span></button>
+        <button role="menuitem" data-new="addAcc" data-goto="wallets">Wallet section <span>Wallets</span></button>
+        <button role="menuitem" data-new="addWish" data-goto="wallets">Wish <span>Wallets</span></button>
+      </div>
+    </div>
+  </div>
+</header>
 
 <main class="wrap">
 
@@ -525,12 +611,14 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
   </div>
 </div>
 
-<div class="dash">
+<div class="views">
 
-  <header class="a-hero hero">
+<div class="view" data-view="today">
+  <header class="a-hero hero full">
     <div class="eyebrow">Net position</div>
     <div class="net num" id="net">&#8369;0</div>
     <div class="netnote sub" id="netNote"></div>
+    <div class="nextdue" id="nextDue"></div>
     <label class="switch" id="assumeWrap" hidden>
       <input type="checkbox" id="assumeChk">
       <span class="sl" aria-hidden="true"></span>
@@ -548,8 +636,11 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
     </details>
     <div id="alert"></div>
   </header>
-
-  <div class="col col-a">
+  <div class="stack">
+    <section class="a-catch" id="catchWrap" style="display:none">
+      <div class="shead"><h2>Catching up</h2><span class="sub" id="catchNote"></span></div>
+      <div class="card" id="catch"></div>
+    </section>
     <section class="a-plan">
       <div class="shead"><h2>Fund the envelopes</h2>
         <div class="seg" id="horizon">
@@ -561,66 +652,14 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
       </div>
       <div class="plan" id="plan"></div>
     </section>
-
-    <section class="a-wallets">
-      <div class="shead"><h2>Wallets</h2>
-        <div class="acts"><span class="sub">Tap a balance to change it</span><button class="btn" id="addAcc">+ Section</button></div>
-      </div>
-      <div class="card" id="accounts"></div>
-    </section>
-
-    <section class="a-wish">
-      <div class="shead"><h2>Wishlist</h2>
-        <div class="acts"><span class="sub" id="wishNote"></span><button class="btn" id="addWish">+ Wish</button></div>
-      </div>
-      <div class="card" id="wish"></div>
-    </section>
-
-    <section class="a-cards" id="cardsWrap">
-      <div class="shead"><h2>Cards</h2>
-        <div class="acts"><button class="btn ghost" id="addCard">+ Card</button><button class="btn" id="addPurchase">+ Purchase</button></div>
-      </div>
-      <div id="cards"></div>
-    </section>
-
-    <section class="a-buys">
-      <div class="shead"><h2>Other purchases</h2>
-        <div class="acts"><span class="sub">Not on a card</span><button class="btn" id="addBuy">+ Purchase</button></div>
-      </div>
-      <div class="card" id="buys"></div>
-    </section>
-
-    <section class="a-loans">
-      <div class="shead"><h2>Instalment loans</h2>
-        <div class="acts"><span class="sub" id="loanNote"></span><button class="btn" id="addLoan">+ Loan</button></div></div>
-      <div class="card" id="loans"></div>
-    </section>
   </div>
-
-  <div class="col col-b">
-    <section class="a-catch" id="catchWrap" style="display:none">
-      <div class="shead"><h2>Catching up</h2><span class="sub" id="catchNote"></span></div>
-      <div class="card" id="catch"></div>
-    </section>
-
+  <div class="stack">
     <section class="a-weekly">
       <div class="shead"><h2>Weekly outlook</h2><span class="sub" id="wkNote"></span></div>
       <div class="card" id="weekly"></div>
     </section>
-
-    <section class="a-owed">
-      <div class="shead"><h2>Owed to you</h2>
-        <div class="acts"><span class="sub" id="owedNote"></span><button class="btn ghost" id="myQrBtn">Your QR</button><button class="btn" id="addOwed">+ Debt</button></div>
-      </div>
-      <div class="card" id="owedList"></div>
-    </section>
-
-    <section class="a-timeline">
-      <div class="shead"><h2>Payment timeline</h2><select id="tlFilter" class="inline"></select></div>
-      <div class="card" id="timeline"></div>
-    </section>
-
-    <section class="a-log">
+  </div>
+    <section class="a-log full">
       <div class="card">
         <details class="fold">
           <summary class="foldhead"><span class="chev">&rsaquo;</span>
@@ -631,15 +670,80 @@ body.boot .a-loans, body.boot .a-log, body.boot .a-foot{animation-delay:.34s}
         </details>
       </div>
     </section>
-  </div>
-
-  <footer class="a-foot">
+  <footer class="a-foot full">
+    <a class="btn show-phone" href="invest/">Invest</a>
+    <button class="btn show-phone" id="syncBtn2">Sync</button>
     <button class="btn" id="exportBtn">Export backup</button>
     <button class="btn" id="icsBtn">Add to Calendar</button>
     <button class="btn" id="importBtn">Import</button>
     <button class="btn ghost bad" id="resetBtn">Reset</button>
     <span class="sub num" id="syncNote" style="margin-left:auto">Stored only in this browser</span>
   </footer>
+</div>
+
+<div class="view" data-view="wallets">
+  <div class="stack">
+    <section class="a-wallets">
+      <div class="shead"><h2>Balances</h2>
+        <div class="acts"><span class="sub">Tap a balance to change it</span><button class="btn" id="addAcc">+ Section</button></div>
+      </div>
+      <div class="card" id="accounts"></div>
+    </section>
+  </div>
+  <div class="stack">
+    <section class="a-wish">
+      <div class="shead"><h2>Wishlist</h2>
+        <div class="acts"><span class="sub" id="wishNote"></span><button class="btn" id="addWish">+ Wish</button></div>
+      </div>
+      <div class="card" id="wish"></div>
+    </section>
+  </div>
+</div>
+
+<div class="view" data-view="cards">
+  <div class="stack">
+    <section class="a-cards" id="cardsWrap">
+      <div class="shead"><h2>Credit cards</h2>
+        <div class="acts"><button class="btn ghost" id="addCard">+ Card</button><button class="btn" id="addPurchase">+ Purchase</button></div>
+      </div>
+      <div id="cards"></div>
+    </section>
+  </div>
+  <div class="stack">
+    <section class="a-buys">
+      <div class="shead"><h2>Other purchases</h2>
+        <div class="acts"><span class="sub">Not on a card</span><button class="btn" id="addBuy">+ Purchase</button></div>
+      </div>
+      <div class="card" id="buys"></div>
+    </section>
+  </div>
+</div>
+
+<div class="view" data-view="loans">
+  <div class="stack">
+    <section class="a-loans">
+      <div class="shead"><h2>Instalment loans</h2>
+        <div class="acts"><span class="sub" id="loanNote"></span><button class="btn" id="addLoan">+ Loan</button></div></div>
+      <div class="card" id="loans"></div>
+    </section>
+  </div>
+  <div class="stack">
+    <section class="a-timeline">
+      <div class="shead"><h2>Payment timeline</h2><select id="tlFilter" class="inline"></select></div>
+      <div class="card" id="timeline"></div>
+    </section>
+  </div>
+</div>
+
+<div class="view" data-view="people">
+    <section class="a-owed full">
+      <div class="shead"><h2>Owed to you</h2>
+        <div class="acts"><span class="sub" id="owedNote"></span><button class="btn ghost" id="myQrBtn">Your QR</button><button class="btn" id="addOwed">+ Debt</button></div>
+      </div>
+      <div class="card" id="owedList"></div>
+    </section>
+</div>
+
 </div>
 
 </main>

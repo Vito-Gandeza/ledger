@@ -6,6 +6,16 @@ sync additionally mirrors it to a row in Supabase keyed by a code only you hold.
 
 ## What it does
 
+- **Five tabs.** Today (the headline, what is due next, funding and the weekly outlook),
+  Wallets, Cards, Loans and People. A sidebar on a wide screen, a tab bar on a phone; each tab
+  has its own link (`#/cards`), so Back walks through them, and the app reopens on the last
+  one. A red count on Today means payments are overdue.
+- **+ New** starts anything from any tab: a card purchase, another purchase, a debt, a loan,
+  a card, a wallet section or a wish. Keys on a computer: 1–5 switch tabs, N opens New,
+  Cmd/Ctrl+Z undoes.
+- **Demo without risk.** `?demo` (or "Look at a demo" on the welcome screen) opens a sample
+  ledger that never reads or writes this browser's data or the cloud.
+
 - **Brand colour and logo.** Every wallet and card takes a colour and an optional image, set
   from its edit dialog. Logos are downscaled to 96px before they are stored, so they sync with
   everything else. Unset providers get a suggested colour, or a stable one derived from the name.

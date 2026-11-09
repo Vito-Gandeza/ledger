@@ -3,7 +3,7 @@
 // exact staleness (cache-first on index.html) was why earlier fixes didn't visibly land.
 // The three scripts are part of the app and follow the same rule; only the icon and
 // manifest are cache-first, since they rarely change.
-const CACHE = "ledger-v5";
+const CACHE = "ledger-v6";
 const SHELL = ["./", "./index.html", "./data.js", "./render.js", "./app.js",
                "./manifest.webmanifest", "./icon.svg"];
 

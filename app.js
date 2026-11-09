@@ -205,10 +205,12 @@ $("#myQrBtn").onclick = openMyQr;
 
 // ---------- welcome ----------
 $("#wStart").onclick = ()=>{ S = starter(); logIt("Started a new ledger"); render(); };
-$("#wDemo").onclick  = ()=>{ S = demoData(); render(); };
+// The demo opens in its own mode, so looking at it can never replace a real ledger.
+$("#wDemo").onclick  = ()=>{ location.search = "?demo"; };
 $("#wImport").onclick = ()=> $("#importFile").click();
 $("#wSync").onclick = setupSync;
 $("#syncBtn").onclick = setupSync;
+$("#syncBtn2").onclick = setupSync;
 $("#undoBtn").onclick = undo;
 $("#assumeChk").onchange = e => { S.assumePaid = e.target.checked; render(); };
 
@@ -732,7 +734,63 @@ $("#importFile").onchange = async e=>{
 };
 $("#resetBtn").onclick = ()=>{ if(confirm("Erase everything stored in this browser?")){ S = blank(); save(); render(); } };
 
-// The top bar is frosted glass; its hairline only appears once content is behind it.
+// ---------- tabs ----------
+// Five destinations, deep-linked as #/cards so Back walks through the tabs you visited.
+const TABS = {today:"Today", wallets:"Wallets", cards:"Cards", loans:"Loans", people:"People"};
+function setTab(t){
+  if(!TABS[t]) t = "today";
+  const moved = document.body.dataset.tab !== t;
+  document.body.dataset.tab = t;
+  $("#tabTitle").textContent = TABS[t];
+  document.title = t === "today" ? "Ledger" : `${TABS[t]} · Ledger`;
+  document.querySelectorAll("#tabs a").forEach(a=>{ if(a.dataset.tab===t) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
+  try{ localStorage.setItem("tab", t); }catch(e){}
+  if(moved) scrollTo(0, 0);
+}
+const tabFromHash = () => (location.hash.match(/^#\/(\w+)/) || [])[1];
+addEventListener("hashchange", ()=> setTab(tabFromHash()));
+setTab(tabFromHash() || (()=>{ try{ return localStorage.getItem("tab"); }catch(e){ return ""; } })());
+$("#demoNote").hidden = !DEMO;
+// The breakdown is a tap away on a phone; on a wide screen it has the room to stay open.
+const heroFold = document.querySelector(".herofold");
+const wide = matchMedia("(min-width:1180px)");
+const syncFold = ()=>{ if(wide.matches) heroFold.open = true; };
+syncFold(); wide.addEventListener?.("change", syncFold);
+
+// ---------- + New ----------
+const newBtn = $("#newBtn"), newMenu = $("#newMenu");
+function toggleNew(open = newMenu.hidden){
+  newMenu.hidden = !open; newBtn.setAttribute("aria-expanded", String(open));
+  if(open) newMenu.querySelector("button").focus();
+}
+newBtn.onclick = ()=> toggleNew();
+newMenu.onclick = e=>{
+  const b = e.target.closest("[data-new]"); if(!b) return;
+  toggleNew(false);
+  if(tabFromHash() !== b.dataset.goto) location.hash = "#/" + b.dataset.goto;
+  setTab(b.dataset.goto);
+  $("#" + b.dataset.new).click();
+};
+newMenu.addEventListener("keydown", e=>{
+  const items = [...newMenu.querySelectorAll("button")], i = items.indexOf(document.activeElement);
+  if(e.key === "Escape"){ toggleNew(false); newBtn.focus(); }
+  else if(e.key === "ArrowDown" || e.key === "ArrowUp"){ e.preventDefault(); items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus(); }
+});
+document.addEventListener("click", e=>{ if(!newMenu.hidden && !e.target.closest(".newwrap")) toggleNew(false); });
+
+// ---------- keys: 1-5 switch tabs, N opens New, Cmd/Ctrl+Z undoes ----------
+addEventListener("keydown", e=>{
+  if(e.target.closest?.("input, textarea, select, [contenteditable]") || document.querySelector("dialog[open]")) return;
+  if((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z"){
+    if(!$("#undoBtn").disabled){ e.preventDefault(); undo(); } return;
+  }
+  if(e.metaKey || e.ctrlKey || e.altKey || document.body.dataset.state !== "ready") return;
+  const k = Object.keys(TABS)[Number(e.key) - 1];
+  if(k){ location.hash = "#/" + k; return; }
+  if(e.key === "n" || e.key === "N"){ e.preventDefault(); toggleNew(true); }
+});
+
+// The app bar's hairline only appears once content is behind it.
 addEventListener("scroll", ()=> document.body.classList.toggle("scrolled", scrollY > 4), {passive:true});
 // Calendar day cells are divs with role="button" — give them the keyboard behaviour that implies.
 document.body.addEventListener("keydown", e=>{

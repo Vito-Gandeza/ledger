@@ -334,14 +334,17 @@ function daysUntilAllowance(){
   return delta === 0 ? 7 : delta; // today IS allowance day: the relevant horizon is the week starting now
 }
 
+// ?demo opens the demo ledger without reading or writing this browser's saved data or the cloud.
+const DEMO = /[?&]demo\b/.test(location.search);
 let S = load();
 function load(){
+  if(DEMO) return demoData();
   try{ const raw = localStorage.getItem("ledger");
        if(raw) return migrate(JSON.parse(raw)); }
   catch(e){ console.warn("unreadable save, starting blank", e); }
   return blank();
 }
-const save = () => { try{ localStorage.setItem("ledger", JSON.stringify(S)); }
+const save = () => { if(DEMO) return; try{ localStorage.setItem("ledger", JSON.stringify(S)); }
                      catch(e){ console.warn("could not save", e); } };
 
 // ---------- cloud sync ----------
@@ -350,7 +353,7 @@ const save = () => { try{ localStorage.setItem("ledger", JSON.stringify(S)); }
 // the database has no table listing or auth, only "give the exact code back".
 const SUPA_URL = "https://fzdaszlzelrtsrzffpnm.supabase.co";
 const SUPA_KEY = "sb_publishable_L3ygAIqbM71V1Hnm_c56xQ_MlQW_oTH";
-const syncCode = () => localStorage.getItem("syncCode") || "";
+const syncCode = () => DEMO ? "" : localStorage.getItem("syncCode") || "";
 const rpc = (fn, body) => fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
   method:"POST",
   headers:{ "content-type":"application/json", apikey:SUPA_KEY, authorization:`Bearer ${SUPA_KEY}` },
@@ -443,6 +446,7 @@ function renderSyncBtn(){
   const b = $("#syncBtn"); if(!b) return;
   const has = syncCode();
   b.textContent = has ? "Synced ⇄" : "Set up sync";
+  const b2 = $("#syncBtn2"); if(b2) b2.textContent = has ? "Synced ⇄" : "Set up sync";
   setSyncNote(has ? "Synced across your devices" : "Stored only in this browser");
 }
 

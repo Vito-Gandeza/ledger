@@ -87,6 +87,18 @@ function paint(){
   }
   $("#alert").innerHTML = alertHtml;
 
+  // The next date anything is due, everything due that day together.
+  const ahead = dues(9999).filter(d=>daysTo(d.it.due)>=0);
+  if(ahead.length){
+    const d0 = ahead[0].it.due, same = ahead.filter(d=>d.it.due===d0), n = daysTo(d0);
+    const names = [...new Set(same.map(d=>d.L.label))];
+    $("#nextDue").innerHTML = `Next due <b>${n===0?"today":n===1?"tomorrow":`in ${n} days`}</b>, ${nice(d0)}:
+      ${esc(names.slice(0,2).join(", "))}${names.length>2?` and ${names.length-2} more`:""} · <b class="num">${money(r2(same.reduce((s,d)=>s+d.it.amount,0)))}</b>`;
+  } else $("#nextDue").textContent = "Nothing else is scheduled.";
+  const bt = $("#badgeToday");
+  bt.hidden = !late.length; bt.textContent = late.length;
+  bt.setAttribute("aria-label", `${late.length} overdue`);
+
   renderAccounts(); renderCards(); renderLoans(); renderPlan(); renderTimeline(); renderWeekly(); renderWish(); renderOwed(); renderCatch(); renderBuys();
   const lc = $("#logCount"); if(lc) lc.textContent = S.log.length ? `${S.log.length} entries` : "nothing yet";
   $("#log").innerHTML = S.log.map(l=>`<div class="row"><div class="grow"><div class="name">${esc(l.t)}</div>
@@ -219,7 +231,7 @@ function renderCards(){
             <button class="iconbtn" data-edit-pur="${L.id}:${p.id}">edit</button></div>`; }).join("")}
         ${it.paid ? `<button class="btn mini" data-unpay-card="${L.id}:${it.due}" style="margin-top:9px">mark unpaid</button>`
                   : `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
-                      <button class="btn ${isOpen?"mini":"primary"}" data-mark-card="${L.id}:${it.due}">&#10003; Paid ${money(it.amount)}</button>
+                      <button class="btn ${isOpen?"mini":"primary"}" data-mark-card="${L.id}:${it.due}">Mark ${money(it.amount)} paid</button>
                       <button class="btn mini ghost" data-pay-card="${L.id}:${it.due}" title="Paid less than the statement — the rest carries to the next cycle">Paid part&hellip;</button></div>`}
       </div>`;
     };
@@ -355,7 +367,7 @@ function renderLoans(){
           <span class="grow ${cl}">${niceY(it.due)}${it.partPaid?` <span class="sub">(${money(it.partPaid)} paid so far)</span>`:""}</span>
           <span class="num">${money(it.amount)}</span>
           ${it.paid?`<button class="iconbtn" data-unpay="${L.id}:${i}">undo</button>`
-                   :`<button class="btn mini" data-mark-paid="${L.id}:${i}">&#10003; Paid</button>`}
+                   :`<button class="btn mini" data-mark-paid="${L.id}:${i}">Paid</button>`}
           <button class="iconbtn" data-edit-inst="${L.id}:${i}">edit</button>
         </div>`;}).join("")}
       </details>`;
@@ -788,7 +800,7 @@ function renderCatch(){
             <div class="sub bad">${plural(-daysTo(it.due), "day")} late</div></div>
           <div class="amt num">${money(it.amount)}</div>
           <div class="rowacts">
-            <button class="btn mini primary" data-${isCard_?`mark-card="${g.L.id}:${it.due}`:`mark-paid="${g.L.id}:${i}`}">&#10003; Paid</button>
+            <button class="btn mini primary" data-${isCard_?`mark-card="${g.L.id}:${it.due}`:`mark-paid="${g.L.id}:${i}`}">Paid</button>
           </div>
         </div>`;
       }).join("");
@@ -921,7 +933,7 @@ function renderWish(){
           <circle class="fill${done?" done":""}" cx="18" cy="18" r="15.5"
             stroke-dasharray="${(C*p.pct/100).toFixed(2)} ${C.toFixed(2)}"/>
         </svg>
-        <span class="ringpct num">${done?"&#10003;":Math.round(p.pct)+"%"}</span>
+        <span class="ringpct num">${done?"Done":Math.round(p.pct)+"%"}</span>
       </span>
       <div class="grow">
         <div class="name">${w.logo?brandMark(w,""):""}${esc(w.name)}</div>
